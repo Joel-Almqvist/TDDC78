@@ -148,21 +148,21 @@ int main (int argc, char ** argv)
 			start = src + displacements[i] - margin;
 			end = src + displacements[i] + sizes[i];
 
-			printf("Sending pixels from index %i\n", displacements[i] -margin);
-
 			MPI_Send(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD);
-			//MPI_Send(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD);
+			MPI_Send(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD);
 		}
 	}
 	else{
-		MPI_Status* status_pre, status_post;
+		MPI_Status status_pre, status_post;
 		// TODO Change these to non_block so we don't enforce unneeded order
-		MPI_Recv(chunk, margin, pixel_mpi, 0, 1111, MPI_COMM_WORLD, status_pre);
-		//MPI_Recv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD, status_pre);
+		MPI_Recv(chunk, margin, pixel_mpi, 0, 1111, MPI_COMM_WORLD, &status_pre);
+		MPI_Recv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD, &status_post);
 	}
 
-
 	MPI_Finalize();
+
+
+
 	// else{
 	// 	MPI_Recv(arr, 5, MPI_INT, 0, 0, communicator,
   //            MPI_STATUS_IGNORE);
