@@ -12,7 +12,7 @@
 
 // rm blurmpi
 // make blurmpi
-// mpirun -np 2 blurmpi 2 data/im1.ppm im1-filtered.ppm
+// mpirun -np 2 blurmpi 2 data/im1.ppm data/im1-filtered.ppm
 int main (int argc, char ** argv)
 {
 
@@ -46,7 +46,6 @@ int main (int argc, char ** argv)
 	pixel *src;
 	if(rank == 0){
 		src = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
-		//arr = malloc(sizeof(int) * 5);
 		if (argc != 4)
 			{
 				fprintf(stderr, "Usage: %s radius infile outfile\n", argv[0]);
@@ -78,7 +77,6 @@ int main (int argc, char ** argv)
 	MPI_Bcast(&ysize, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&radius, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	printf("Rank %i got x: %i, y: %i, radius: %i\n", rank, xsize, ysize, radius);
 
 	int* sizes = malloc(sizeof(int) *(p-1));
 	int* displacements = malloc(sizeof(int) *(p-1));
@@ -104,9 +102,6 @@ int main (int argc, char ** argv)
 				(sizes[rank] + 2 * floor(radius) * xsize));
 
 
-	printf("Allocated for %i pixels, with floor(radius) = %i\n",
-	(int) (sizes[rank] + 2 * floor(radius) * xsize), (int)floor(radius));
-
 	// Creating a MPI_Type ***********************************************
 	MPI_Datatype pixel_mpi;
 	pixel pxl;
@@ -130,12 +125,7 @@ int main (int argc, char ** argv)
 	MPI_Type_create_struct(3, block_lengths, displ, block_types, &pixel_mpi);
 	MPI_Type_commit(&pixel_mpi);
 
-	// ***********************************
-
-	printf("Added %i to chunk\n", ((int) (xsize*floor(radius))));
-	printf("Size is %i\n", sizes[rank]);
-	printf("Displacement is %i\n", displacements[rank]);
-	printf("Sending %i and %i #elements\n", sizes[0], sizes[1]);
+	// ***********************************************************''
 
 	 MPI_Scatterv(src, sizes, displacements, pixel_mpi,
 	 	chunk + (int)(xsize*floor(radius)), sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
@@ -159,88 +149,28 @@ int main (int argc, char ** argv)
 		MPI_Recv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD, &status_post);
 	}
 
-	MPI_Finalize();
+
+	double w[MAX_RAD];
+
+	get_gauss_weights(radius, w);
+
+	printf("xsize = %i sizes[rank] = %i    size[rank]/xsize = %i\n"
+	, xsize, sizes[rank], sizes[rank]/xsize);
+
+	blurfilter(xsize, sizes[rank]/xsize, chunk, radius, w, 0, sizes[rank]/xsize);
 
 
+	MPI_Gatherv(chunk+margin, sizes[rank], pixel_mpi, src, sizes, displacements,
+			pixel_mpi, 0, MPI_COMM_WORLD);
 
-	// else{
-	// 	MPI_Recv(arr, 5, MPI_INT, 0, 0, communicator,
-  //            MPI_STATUS_IGNORE);
-	// }
+	if(rank == 0){
+		printf("Writing output file\n");
+		if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
+			MPI_Finalize();
+			exit(1);
+		}
+	}
+MPI_Finalize();
 
 
-
-
-// 	pixel *src_read;
-// 	pixel *src_write;
-//
-// 	int radius, xsize, ysize, colmax;
-// 	if(rank == 0){
-//
-// 	pixel *src_read = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
-// 	pixel *src_write = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
-// 	struct timespec stime, etime;
-// 	double w[MAX_RAD];
-//
-// 	/* Take care of the arguments */
-// 	if (argc != 4)
-// 	{
-// 		fprintf(stderr, "Usage: %s radius infile outfile\n", argv[0]);
-// 		exit(1);
-// 	}
-//
-// 	radius = atoi(argv[1]);
-// 	if ((radius > MAX_RAD) || (radius < 1))
-// 	{
-// 		fprintf(stderr, "Radius (%d) must be greater than zero and less then %d\n", radius, MAX_RAD);
-// 		exit(1);
-// 	}
-//
-// 	/* Read file */
-// 	if (read_ppm (argv[2], &xsize, &ysize, &colmax, (char *) src) != 0)
-// 		exit(1);
-//
-// 	if (colmax > 255)
-// 	{
-// 		fprintf(stderr, "Too large maximum color-component value\n");
-// 		exit(1);
-// 	}
-// 	printf("Has read the image, generating coefficients\n");
-// }
-//
-// 	// TODO Scatter
-// 	MPI_Scatter(src, MAX_PIXELS, )
-//
-//
-// 	/* filter */
-// 	get_gauss_weights(radius, w);
-//
-// 	printf("Calling filter\n");
-//
-//
-// 	int partition = ysize / p;
-// 	int ymin = partition * rank;
-// 	int ymax;
-// 	if(rank == p-1){
-// 		// Always catch all rows even if the number of rows is not of modulu_p
-// 		ymax = ysize;
-// 	}
-// 	else{
-// 		ymax = partition * (rank+1);
-// 	}
-//
-// 	clock_gettime(CLOCK_REALTIME, &stime);
-// 	blurfilter(xsize, ysize, src, radius, w, ymin, ymax);
-// 	clock_gettime(CLOCK_REALTIME, &etime);
-//
-// 	printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-// 	1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
-//
-// 	/* Write result */
-// 	printf("Writing output file\n");
-//
-// 	MPI_Finalize();
-// 	if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0) {
-// 		exit(1);
-// 	}
 }
