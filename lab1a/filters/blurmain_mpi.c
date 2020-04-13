@@ -40,7 +40,8 @@ int main (int argc, char ** argv)
 	MPI_Comm_size( MPI_COMM_WORLD, &p );
   MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
-	int radius, xsize, ysize, colmax;
+	int colmax, xsize, ysize, radius;
+	int dim[3];
 
 	// src is only used by rank 0 but needs to be declared for all
 	pixel *src;
@@ -70,16 +71,50 @@ int main (int argc, char ** argv)
 			}
 			printf("Has read the image, generating coefficients\n");
 
+			dim[0] = radius;
+			dim[1] = xsize;
+			dim[2] = ysize;
 	}
 
-	// TODO combine these three by creating an array/struct of them
-	MPI_Bcast(&xsize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&ysize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&radius, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&dim, 3, MPI_INT, 0, MPI_COMM_WORLD);
+	radius = dim[0];
+	xsize = dim[1];
+	ysize = dim[2];
 
 
+	// Creating a MPI_Type ***********************************************
+	MPI_Datatype pixel_mpi;
+	pixel pxl;
+
+	int block_lengths [] = {1, 1 ,1};
+
+	MPI_Datatype block_types [] = { MPI_UNSIGNED_CHAR,
+		MPI_UNSIGNED_CHAR, MPI_UNSIGNED_CHAR };
+
+	MPI_Aint start, displ[3];
+
+	MPI_Get_address( &pxl, &start );
+	MPI_Get_address( &pxl.r, &displ[0] );
+	MPI_Get_address( &pxl.g, &displ[1] );
+	MPI_Get_address( &pxl.b, &displ[2] );
+
+	displ[0] -= start;
+	displ[1] -= start;
+	displ[2] -= start;
+
+	MPI_Type_create_struct(3, block_lengths, displ, block_types, &pixel_mpi);
+	MPI_Type_commit(&pixel_mpi);
+
+	// ***********************************************************''
+
+
+
+	// The size of each processors partition of pixels
 	int* sizes = malloc(sizeof(int) *(p-1));
 	int* displacements = malloc(sizeof(int) *(p-1));
+
+	// How many pixels will be sent to all partitions
+	int* sizes_to_send = malloc(sizeof(int) *(p-1));
 
 	int base_size = (ysize / p)*xsize;
 	for(int i = 0; i < p; i++){
@@ -91,46 +126,35 @@ int main (int argc, char ** argv)
 		else{
 			*(sizes+i) = base_size;
 		}
-	};
 
+		if(i == 0){
+			*sizes_to_send = 0;
+		}
+		else{
+			*(sizes_to_send+i) = *(sizes+i);
+		}
+	};
 
 
 	printf("Rank %i got size %i\n", rank, sizes[rank]);
 
-	// TODO Here we over allocate for the edge partitions
-	pixel* chunk = (pixel*) malloc(sizeof(pixel) *
-				(sizes[rank] + 2 * floor(radius) * xsize));
+	pixel* chunk;
+	if(rank != 0){
+		chunk = (pixel*) malloc(sizeof(pixel) *
+			(sizes[rank] + 2 * floor(radius) * xsize));
+	}
 
 
-	// Creating a MPI_Type ***********************************************
-	MPI_Datatype pixel_mpi;
-	pixel pxl;
-
-	int block_lengths [] = {1, 1 ,1};
-
-	MPI_Datatype block_types [] = { MPI_UNSIGNED_CHAR,
-			MPI_UNSIGNED_CHAR, MPI_UNSIGNED_CHAR };
-
-	MPI_Aint start, displ[3];
-
-	MPI_Get_address( &pxl, &start );
-	MPI_Get_address( &pxl.r, &displ[0] );
-  MPI_Get_address( &pxl.g, &displ[1] );
-  MPI_Get_address( &pxl.b, &displ[2] );
-
-	displ[0] -= start;
-	displ[1] -= start;
-	displ[2] -= start;
-
-	MPI_Type_create_struct(3, block_lengths, displ, block_types, &pixel_mpi);
-	MPI_Type_commit(&pixel_mpi);
-
-	// ***********************************************************''
-
-	 MPI_Scatterv(src, sizes, displacements, pixel_mpi,
+	 MPI_Scatterv(src, sizes_to_send, displacements, pixel_mpi,
 	 	chunk + (int)(xsize*floor(radius)), sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
 
+
 	int margin = floor(radius)*xsize;
+
+	MPI_Request req_prefix;
+	MPI_Request req_suffix;
+	MPI_Request* requests;
+
 	if(rank == 0){
 		pixel* start;
 		pixel* end;
@@ -138,29 +162,39 @@ int main (int argc, char ** argv)
 			start = src + displacements[i] - margin;
 			end = src + displacements[i] + sizes[i];
 
-			MPI_Send(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD);
-			MPI_Send(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD);
+			// WARNING What happens when these fall out of scope and we write to them?
+			MPI_Request rq1;
+			MPI_Request rq2;
+			//MPI_Isend(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD, &rq1);
+			//MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
+			MPI_Isend(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD, &rq1);
+			MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
 		}
 	}
 	else{
+		// TODO The margin is not transmitted correctly, it is black
 		MPI_Status status_pre, status_post;
-		// TODO Change these to non_block so we don't enforce unneeded order
-		MPI_Recv(chunk, margin, pixel_mpi, 0, 1111, MPI_COMM_WORLD, &status_pre);
-		MPI_Recv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD, &status_post);
+		MPI_Irecv(chunk, margin, pixel_mpi, 0, 1111, MPI_COMM_WORLD,
+			 &req_prefix);
+		MPI_Irecv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD,
+			 &req_suffix);
 	}
 
 
 	double w[MAX_RAD];
-
 	get_gauss_weights(radius, w);
+	if(rank != 0){
+		MPI_Wait(&req_prefix, MPI_STATUS_IGNORE);
+		MPI_Wait(&req_suffix, MPI_STATUS_IGNORE);
+		blurfilter(xsize, sizes[rank]/xsize, chunk, radius, w, 0, sizes[rank]/xsize);
+	}
+	else{
+		blurfilter(xsize, sizes[rank]/xsize, src, radius, w, 0, sizes[rank]/xsize);
+	}
 
-	printf("xsize = %i sizes[rank] = %i    size[rank]/xsize = %i\n"
-	, xsize, sizes[rank], sizes[rank]/xsize);
-
-	blurfilter(xsize, sizes[rank]/xsize, chunk, radius, w, 0, sizes[rank]/xsize);
-
-
-	MPI_Gatherv(chunk+margin, sizes[rank], pixel_mpi, src, sizes, displacements,
+	MPI_Barrier(MPI_COMM_WORLD);
+	// Make sure that every process is done before we gather the data
+	MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
 			pixel_mpi, 0, MPI_COMM_WORLD);
 
 	if(rank == 0){
