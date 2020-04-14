@@ -136,15 +136,20 @@ int main (int argc, char ** argv)
 	};
 
 
-	printf("Rank %i got size %i\n", rank, sizes[rank]);
-
 	pixel* chunk;
-	if(rank != 0){
+	if(rank == p - 1){
+		// We only need size for 1 margin
+		chunk = (pixel*) malloc(sizeof(pixel) *
+			(sizes[rank] + floor(radius) * xsize));
+
+	} else if (rank != 0){
+
 		chunk = (pixel*) malloc(sizeof(pixel) *
 			(sizes[rank] + 2 * floor(radius) * xsize));
+
 	}
 
-
+		// Scatter the image in non-overlapping chunks
 	 MPI_Scatterv(src, sizes_to_send, displacements, pixel_mpi,
 	 	chunk + (int)(xsize*floor(radius)), sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
 
@@ -153,47 +158,64 @@ int main (int argc, char ** argv)
 
 	MPI_Request req_prefix;
 	MPI_Request req_suffix;
-	MPI_Request* requests;
 
 	if(rank == 0){
 		pixel* start;
 		pixel* end;
 		for(int i = 1; i < p; i++){
-			start = src + displacements[i] - margin;
-			end = src + displacements[i] + sizes[i];
 
-			// WARNING What happens when these fall out of scope and we write to them?
 			MPI_Request rq1;
-			MPI_Request rq2;
-			//MPI_Isend(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD, &rq1);
-			//MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
+			start = src + displacements[i] - margin;
 			MPI_Isend(start, margin, pixel_mpi, i, 1111, MPI_COMM_WORLD, &rq1);
-			MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
+
+			// The last chunk does not have a lower margin
+			if(i != p -1){
+				MPI_Request rq2;
+				end = src + displacements[i] + sizes[i];
+				MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
+			}
 		}
 	}
 	else{
-		// TODO The margin is not transmitted correctly, it is black
-		MPI_Status status_pre, status_post;
+		MPI_Status status_pre;
 		MPI_Irecv(chunk, margin, pixel_mpi, 0, 1111, MPI_COMM_WORLD,
 			 &req_prefix);
-		MPI_Irecv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD,
-			 &req_suffix);
+
+			 // The last chunk does not have lower margin
+			 if(rank != p - 1){
+				 MPI_Status status_post;
+				 MPI_Irecv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD,
+					 &req_suffix);
+			 }
 	}
-
-
 	double w[MAX_RAD];
 	get_gauss_weights(radius, w);
-	if(rank != 0){
-		MPI_Wait(&req_prefix, MPI_STATUS_IGNORE);
-		MPI_Wait(&req_suffix, MPI_STATUS_IGNORE);
-		blurfilter(xsize, sizes[rank]/xsize, chunk, radius, w, 0, sizes[rank]/xsize);
+
+	if(rank == 0){
+		blurfilter(xsize, (sizes[rank]+margin)/xsize, src, radius, w, 0,
+			(sizes[rank]+margin)/xsize);
 	}
 	else{
-		blurfilter(xsize, sizes[rank]/xsize, src, radius, w, 0, sizes[rank]/xsize);
+		MPI_Status status_pre;
+		MPI_Wait(&req_prefix, &status_pre);
+
+		if(rank != p - 1){
+			MPI_Status status_post;
+			MPI_Wait(&req_suffix, &status_post);
+
+			blurfilter(xsize, (2*margin+sizes[rank])/xsize, chunk, radius, w, 0,
+			 	(2*margin+sizes[rank])/xsize);
+		}
+		else{
+			blurfilter(xsize, (margin+sizes[rank])/xsize, chunk, radius, w, 0,
+			(margin+sizes[rank])/xsize);
+		}
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
 	// Make sure that every process is done before we gather the data
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// Gather chunks without their margin from all non root processes
 	MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
 			pixel_mpi, 0, MPI_COMM_WORLD);
 
