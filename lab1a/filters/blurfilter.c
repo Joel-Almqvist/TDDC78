@@ -19,8 +19,6 @@ pixel* pix(pixel* image, const int xx, const int yy, const int xsize)
 void blurfilter(const int xsize, const int ysize, pixel* src,
 	const int radius, const double *w, const int min_y, const int max_y)
 {
-
-	printf("Xsize: %i  Ysize: %i\n", xsize, ysize);
 	int x, y, x2, y2, wi;
 	double r, g, b, n, wc;
 	pixel *dst = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
