@@ -16,29 +16,16 @@
 int main (int argc, char ** argv)
 {
 
-
-	// TODO
-	// 1 - Read file
-	// 2 - Scatter file, ymax/p + 2*radius = number of rows
-	//	use scatterv to send custom sized packets OR broadcast everything (don't)
-
-	// Check what all the arguments in scatterv do
-
-
-	// 3 - Filter ymax/p rows, just use the 2*radius rows for calculations
-	// 4 - Combine all rows in correct order and write to file
-
-	// TODO phreads
-	// Load file twice, one read one for write
-	// Write only your rows on write
-
-
 	int p;   // number of started MPI processes
 	int rank;  // my rank
 	MPI_Status status;
   MPI_Init( &argc, &argv );
 	MPI_Comm_size( MPI_COMM_WORLD, &p );
   MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+
+	double start_time;
+	if(rank == 0)
+		start_time = MPI_Wtime();
 
 	int colmax, xsize, ysize, radius;
 	int dim[3];
@@ -226,7 +213,7 @@ int main (int argc, char ** argv)
 			exit(1);
 		}
 	}
+	if(rank == 0)
+	printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 MPI_Finalize();
-
-
 }
