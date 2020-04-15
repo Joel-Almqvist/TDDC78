@@ -1,5 +1,5 @@
-CC = gcc
-CFLAGS =
+CC = icc
+CFLAGS = -std=c99
 LFLAGS = -lpthread -lrt -lm
 
 all: blurc thresc
@@ -17,4 +17,4 @@ arc:
 	tar cf - *.c *.h Makefile data/* | gzip - > filters.tar.gz
 
 blurmpi: ppmio.o gaussw.o blurfilter.o
-	mpicc -o blurmpi ppmio.o gaussw.o blurfilter.o blurmain_mpi.c $(LFLAGS)
+	mpicc -std=c99 -o blurmpi ppmio.o gaussw.o blurfilter.o blurmain_mpi.c $(LFLAGS)
