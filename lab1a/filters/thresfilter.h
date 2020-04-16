@@ -13,4 +13,8 @@ typedef struct _pixel {
 
 void thresfilter(const int xsize, const int ysize, pixel* src);
 
+void threshfilter_exec(const int xsize, const int ysize, pixel* src, unsigned int inc_sum);
+
+unsigned int threshfilter_sum(const int xsize, const int ysize, pixel* src);
+
 #endif
