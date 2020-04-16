@@ -158,7 +158,7 @@ int main (int argc, char ** argv)
 			// The last chunk does not have a lower margin
 			if(i != p -1){
 				MPI_Request rq2;
-				end = src + displacements[i] + sizes[i];
+				end = src + displacements[i+1];
 				MPI_Isend(end, margin, pixel_mpi, i, 2222, MPI_COMM_WORLD, &rq2);
 			}
 		}
@@ -171,7 +171,7 @@ int main (int argc, char ** argv)
 			 // The last chunk does not have lower margin
 			 if(rank != p - 1){
 				 MPI_Status status_post;
-				 MPI_Irecv(chunk + sizes[rank], margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD,
+				 MPI_Irecv(chunk + sizes[rank]+margin, margin, pixel_mpi, 0, 2222, MPI_COMM_WORLD,
 					 &req_suffix);
 			 }
 	}
@@ -189,6 +189,13 @@ int main (int argc, char ** argv)
 		if(rank != p - 1){
 			MPI_Status status_post;
 			MPI_Wait(&req_suffix, &status_post);
+
+			int foo;
+
+			MPI_Get_count(&status_post, pixel_mpi, &foo);
+
+			printf("Rank %i got %i pixels as the post margin\n", rank, foo);
+
 
 			blurfilter(xsize, (2*margin+sizes[rank])/xsize, chunk, radius, w, 0,
 			 	(2*margin+sizes[rank])/xsize);
