@@ -31,9 +31,6 @@ int main (int argc, char ** argv)
 	MPI_Comm_size( MPI_COMM_WORLD, &p );
   MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
-	double start_time;
-	if(rank == 0)
-		start_time = MPI_Wtime();
 
 	int colmax, xsize, ysize;
 	int dim[3];
@@ -64,6 +61,11 @@ int main (int argc, char ** argv)
 			dim[1] = xsize;
 			dim[2] = ysize;
 	}
+
+	double start_time;
+	if(rank == 0)
+		start_time = MPI_Wtime();
+
 
 	MPI_Bcast(&dim, 3, MPI_INT, 0, MPI_COMM_WORLD);
 	colmax = dim[0];
@@ -160,6 +162,7 @@ int main (int argc, char ** argv)
   MPI_Gatherv(chunk, sizes_to_send[rank], pixel_mpi, src, sizes_to_send,
     displacements, pixel_mpi, 0, MPI_COMM_WORLD);
 
+		printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 
 	if(rank == 0){
 		printf("Writing output file\n");
@@ -169,6 +172,5 @@ int main (int argc, char ** argv)
 		}
 	}
 	if(rank == 0)
-	printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
   MPI_Finalize();
 }

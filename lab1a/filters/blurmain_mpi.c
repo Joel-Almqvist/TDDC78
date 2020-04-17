@@ -24,8 +24,6 @@ int main (int argc, char ** argv)
   MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
 	double start_time;
-	if(rank == 0)
-		start_time = MPI_Wtime();
 
 	int colmax, xsize, ysize, radius;
 	int dim[3];
@@ -62,6 +60,10 @@ int main (int argc, char ** argv)
 			dim[1] = xsize;
 			dim[2] = ysize;
 	}
+
+	if(rank == 0)
+		start_time = MPI_Wtime();
+
 
 	MPI_Bcast(&dim, 3, MPI_INT, 0, MPI_COMM_WORLD);
 	radius = dim[0];
@@ -213,6 +215,8 @@ int main (int argc, char ** argv)
 	MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
 			pixel_mpi, 0, MPI_COMM_WORLD);
 
+	printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
+
 	if(rank == 0){
 		printf("Writing output file\n");
 		if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
@@ -221,6 +225,5 @@ int main (int argc, char ** argv)
 		}
 	}
 	if(rank == 0)
-	printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 MPI_Finalize();
 }
