@@ -1,4 +1,4 @@
-CC = icc
+CC = gcc
 CFLAGS =
 LFLAGS = -lpthread -lrt -lm
 
@@ -21,3 +21,6 @@ blurmpi: ppmio.o gaussw.o blurfilter.o
 
 threshmpi: ppmio.o thresfilter.o
 		mpicc -o threshmpi ppmio.o thresfilter.o threshmain_mpi.c $(LFLAGS)
+
+blurpt: ppmio.o gaussw.o blurfilter.o
+	$(CC) -o blurpt ppmio.o gaussw.o blurfilter.o blurmain_pthreads.c $(LFLAGS)
