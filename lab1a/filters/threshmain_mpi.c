@@ -137,14 +137,13 @@ int main (int argc, char ** argv)
     chunk = &pxl;
   }
 
-
-		// Scatter the image in non-overlapping chunks
+	 // Scatter the image in non-overlapping chunks
 	 MPI_Scatterv(src, sizes_to_send, displacements, pixel_mpi,
 	 	chunk, sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
 
   unsigned int my_sum = 0;
-  unsigned int global_sum = 0;
-  // TODO Fix this
+  unsigned long global_sum = 0;
+	unsigned long avg;
   if(rank == 0){
     my_sum = threshfilter_sum(xsize, sizes[rank]/xsize, src);
   }
@@ -154,12 +153,16 @@ int main (int argc, char ** argv)
 
 
   MPI_Reduce(&my_sum, &global_sum, 1, MPI_UNSIGNED, MPI_SUM, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&global_sum, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+	if(rank == 0){
+		avg = global_sum / (xsize*ysize);
+	}
+
+	MPI_Bcast(&avg, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
   if(rank == 0){
-    threshfilter_exec(xsize, sizes[rank]/xsize, src, global_sum / (xsize*ysize));
+    threshfilter_exec(xsize, sizes[rank]/xsize, src, avg);
   }
   else{
-    threshfilter_exec(xsize, sizes[rank]/xsize, chunk, global_sum / (xsize*ysize));
+    threshfilter_exec(xsize, sizes[rank]/xsize, chunk, avg);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
