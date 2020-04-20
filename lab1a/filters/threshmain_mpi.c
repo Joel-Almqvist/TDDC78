@@ -169,9 +169,9 @@ int main (int argc, char ** argv)
   MPI_Gatherv(chunk, sizes_to_send[rank], pixel_mpi, src, sizes_to_send,
     displacements, pixel_mpi, 0, MPI_COMM_WORLD);
 
-		printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 
 	if(rank == 0){
+		printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 		printf("Writing output file\n");
 		if(write_ppm (argv[2], xsize, ysize, (char *)src) != 0){
 			MPI_Finalize();
