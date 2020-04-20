@@ -128,6 +128,14 @@ void* blurfilter_pt(void* args_void)
 	// Row thing is super easy, for clolumns handle multiple values at the same time
 	// to make the cache happy. Also remember to use a barrier
 
+	// For every y
+		// for every i < radius
+			// for every x
+			// create weights
+		// for every x
+			// add weight into dest
+
+
 	for (y=min_y; y<max_y; y++)
 	{
 		for (x=0; x<xsize; x++)
