@@ -102,11 +102,11 @@ int main (int argc, char ** argv)
 
 
 	// The size of each processors partition of pixels
-	int* sizes = malloc(sizeof(int) *(p-1));
-	int* displacements = malloc(sizeof(int) *(p-1));
+	int* sizes = malloc(sizeof(int) *p);
+	int* displacements = malloc(sizeof(int) *p);
 
 	// How many pixels will be sent to all partitions
-	int* sizes_to_send = malloc(sizeof(int) *(p-1));
+	int* sizes_to_send = malloc(sizeof(int) *p);
 
 	int base_size = (ysize / p)*xsize;
 	for(int i = 0; i < p; i++){
