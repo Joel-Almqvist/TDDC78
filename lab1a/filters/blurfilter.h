@@ -20,7 +20,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 		double* w;
 		pixel* src;
 		pixel* dst;
-		pthread_rwlock_t* rw_ptr;
+		//pthread_rwlock_t* rw_ptr;
 	} blur_args;
 
 

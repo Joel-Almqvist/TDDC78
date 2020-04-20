@@ -61,8 +61,9 @@ int main (int argc, char ** argv)
 			dim[2] = ysize;
 	}
 
-	if(rank == 0)
+	if(rank == 0){
 		start_time = MPI_Wtime();
+	}
 
 
 	MPI_Bcast(&dim, 3, MPI_INT, 0, MPI_COMM_WORLD);
@@ -97,13 +98,12 @@ int main (int argc, char ** argv)
 	// ***********************************************************''
 
 
-
 	// The size of each processors partition of pixels
-	int* sizes = malloc(sizeof(int) *(p-1));
-	int* displacements = malloc(sizeof(int) *(p-1));
+	int* sizes = malloc(sizeof(int) *p);
+	int* displacements = malloc(sizeof(int) *p);
 
 	// How many pixels will be sent to all partitions
-	int* sizes_to_send = malloc(sizeof(int) *(p-1));
+	int* sizes_to_send = malloc(sizeof(int) *p);
 
 	int base_size = (ysize / p)*xsize;
 	for(int i = 0; i < p; i++){
@@ -136,6 +136,10 @@ int main (int argc, char ** argv)
 		chunk = (pixel*) malloc(sizeof(pixel) *
 			(sizes[rank] + 2 * floor(radius) * xsize));
 
+	}
+	else{
+		// Reuse dummy pixel from above, we just need to point to an adress
+		chunk = &pxl;
 	}
 
 		// Scatter the image in non-overlapping chunks
@@ -192,13 +196,6 @@ int main (int argc, char ** argv)
 			MPI_Status status_post;
 			MPI_Wait(&req_suffix, &status_post);
 
-			int foo;
-
-			MPI_Get_count(&status_post, pixel_mpi, &foo);
-
-			printf("Rank %i got %i pixels as the post margin\n", rank, foo);
-
-
 			blurfilter(xsize, (2*margin+sizes[rank])/xsize, chunk, radius, w, 0,
 			 	(2*margin+sizes[rank])/xsize);
 		}
@@ -215,15 +212,14 @@ int main (int argc, char ** argv)
 	MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
 			pixel_mpi, 0, MPI_COMM_WORLD);
 
-	printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 
 	if(rank == 0){
+		printf("Total execution took %f seconds\n", MPI_Wtime() - start_time);
 		printf("Writing output file\n");
 		if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
 			MPI_Finalize();
 			exit(1);
 		}
 	}
-	if(rank == 0)
-MPI_Finalize();
+	MPI_Finalize();
 }
