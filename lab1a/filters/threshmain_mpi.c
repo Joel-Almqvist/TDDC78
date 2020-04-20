@@ -132,6 +132,10 @@ int main (int argc, char ** argv)
   if(rank != 0){
     chunk = malloc(sizeof(pixel) * sizes[rank]);
   }
+  else{
+    // Reuse dummy pixel from above, we just need to point to an adress
+    chunk = &pxl;
+  }
 
 
 		// Scatter the image in non-overlapping chunks
