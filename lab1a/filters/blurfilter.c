@@ -111,7 +111,7 @@ void* blurfilter_pt(void* args_void)
 	const double* w = args->w;
 	pixel* src = args->src;
 	pixel* dst = args->dst;
-	pthread_rwlock_t* rw_lock = args->rw_ptr;
+	//pthread_rwlock_t* rw_lock = args->rw_ptr;
 
 	printf("xsize = %i  ysize = %i  radius = %i  min_y = %i  max_y = %i\n",
 	xsize, ysize, radius, min_y, max_y);
@@ -164,12 +164,13 @@ void* blurfilter_pt(void* args_void)
 					n += wc;
 				}
 			}
+			/*
 			pthread_rwlock_wrlock(rw_lock);
 			pix(dst,x,y, xsize)->r = r/n;
 			pix(dst,x,y, xsize)->g = g/n;
 			pix(dst,x,y, xsize)->b = b/n;
 			pthread_rwlock_unlock(rw_lock);
-			/*
+			
 			pix(row,x,0, xsize)->r = r/n;
 			pix(row,x,0, xsize)->g = g/n;
 			pix(row,x,0, xsize)->b = b/n;
@@ -182,11 +183,11 @@ void* blurfilter_pt(void* args_void)
 	{
 		for (x=0; x<xsize; x++)
 		{
-			pthread_rwlock_rdlock(rw_lock);
+			//pthread_rwlock_rdlock(rw_lock);
 			r = w[0] * pix(dst, x, y, xsize)->r;
 			g = w[0] * pix(dst, x, y, xsize)->g;
 			b = w[0] * pix(dst, x, y, xsize)->b;
-			pthread_rwlock_unlock(rw_lock);
+			//pthread_rwlock_unlock(rw_lock);
 			n = w[0];
 			for ( wi=1; wi <= radius; wi++)
 			{
@@ -194,29 +195,29 @@ void* blurfilter_pt(void* args_void)
 				y2 = y - wi;
 				if (y2 >= 0)
 				{
-					pthread_rwlock_rdlock(rw_lock);
+					//pthread_rwlock_rdlock(rw_lock);
 					r += wc * pix(dst, x, y2, xsize)->r;
 					g += wc * pix(dst, x, y2, xsize)->g;
 					b += wc * pix(dst, x, y2, xsize)->b;
-					pthread_rwlock_unlock(rw_lock);
+					//pthread_rwlock_unlock(rw_lock);
 					n += wc;
 				}
 				y2 = y + wi;
 				if (y2 < ysize)
 				{
-					pthread_rwlock_rdlock(rw_lock);
+					//pthread_rwlock_rdlock(rw_lock);
 					r += wc * pix(dst, x, y2, xsize)->r;
 					g += wc * pix(dst, x, y2, xsize)->g;
 					b += wc * pix(dst, x, y2, xsize)->b;
-					pthread_rwlock_unlock(rw_lock);
+					//pthread_rwlock_unlock(rw_lock);
 					n += wc;
 				}
 			}
-			pthread_rwlock_wrlock(rw_lock);
+			//pthread_rwlock_wrlock(rw_lock);
 			pix(dst,x,y, xsize)->r = r/n;
 			pix(dst,x,y, xsize)->g = g/n;
 			pix(dst,x,y, xsize)->b = b/n;
-			pthread_rwlock_unlock(rw_lock);
+			//pthread_rwlock_unlock(rw_lock);
 		}
 	}
 	return NULL;
