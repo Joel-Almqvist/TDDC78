@@ -142,12 +142,18 @@ int main (int argc, char ** argv)
 		chunk = &pxl;
 	}
 
-		// Scatter the image in non-overlapping chunks
-	 MPI_Scatterv(src, sizes_to_send, displacements, pixel_mpi,
-	 	chunk + (int)(xsize*floor(radius)), sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
+		if(p != 1){
+			// Scatter the image in non-overlapping chunks
+			MPI_Scatterv(src, sizes_to_send, displacements, pixel_mpi,
+				chunk + (int)(xsize*floor(radius)), sizes[rank], pixel_mpi, 0, MPI_COMM_WORLD);
+		}
+
 
 
 	int margin = floor(radius)*xsize;
+	if(p == 1){
+		margin = 0;
+	}
 
 	MPI_Request req_prefix;
 	MPI_Request req_suffix;
@@ -208,9 +214,11 @@ int main (int argc, char ** argv)
 	// Make sure that every process is done before we gather the data
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	// Gather chunks without their margin from all non root processes
-	MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
+	if(p != 1){
+		// Gather chunks without their margin from all non root processes
+		MPI_Gatherv(chunk+margin, sizes_to_send[rank], pixel_mpi, src, sizes_to_send, displacements,
 			pixel_mpi, 0, MPI_COMM_WORLD);
+	}
 
 
 	if(rank == 0){
