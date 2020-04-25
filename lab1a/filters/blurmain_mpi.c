@@ -12,7 +12,7 @@
 
 // rm blurmpi
 // make blurmpi
-// mpirun -np 2 blurmpi 2 data/im1.ppm data/im1-filtered.ppm
+// mpirun -np 2 blurmpi 12 data/im1.ppm data/im1-filtered.ppm
 int main (int argc, char ** argv)
 {
 

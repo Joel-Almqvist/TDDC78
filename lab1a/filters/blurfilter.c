@@ -22,7 +22,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 	int x, y, x2, y2, wi;
 	double r, g, b, n, wc;
 
-	//pixel *dst = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
+	pixel *dst = (pixel*) malloc(sizeof(pixel) * (max_y - min_y)*xsize);
 
 
 	for (y=min_y; y<max_y; y++)
@@ -54,9 +54,9 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 
 				}
 			}
-			pix(src,x,y, xsize)->r = r/n;
-			pix(src,x,y, xsize)->g = g/n;
-			pix(src,x,y, xsize)->b = b/n;
+			pix(dst,x,y - min_y, xsize)->r = r/n;
+			pix(dst,x,y - min_y, xsize)->g = g/n;
+			pix(dst,x,y - min_y, xsize)->b = b/n;
 		}
 	}
 
@@ -66,9 +66,9 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 	{
 		for (x=0; x<xsize; x++)
 		{
-			r = w[0] * pix(src, x, y, xsize)->r;
-			g = w[0] * pix(src, x, y, xsize)->g;
-			b = w[0] * pix(src, x, y, xsize)->b;
+			r = w[0] * pix(dst, x, y - min_y, xsize)->r;
+			g = w[0] * pix(dst, x, y - min_y, xsize)->g;
+			b = w[0] * pix(dst, x, y - min_y, xsize)->b;
 			n = w[0];
 			for ( wi=1; wi <= radius; wi++)
 			{
@@ -76,17 +76,17 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 				x2 = x - wi;
 				if (x2 >= 0)
 				{
-					r += wc * pix(src, x2, y, xsize)->r;
-					g += wc * pix(src, x2, y, xsize)->g;
-					b += wc * pix(src, x2, y, xsize)->b;
+					r += wc * pix(dst, x2, y - min_y, xsize)->r;
+					g += wc * pix(dst, x2, y - min_y, xsize)->g;
+					b += wc * pix(dst, x2, y - min_y, xsize)->b;
 					n += wc;
 				}
 				x2 = x + wi;
 				if (x2 < xsize)
 				{
-					r += wc * pix(src, x2, y, xsize)->r;
-					g += wc * pix(src, x2, y, xsize)->g;
-					b += wc * pix(src, x2, y, xsize)->b;
+					r += wc * pix(dst, x2, y - min_y, xsize)->r;
+					g += wc * pix(dst, x2, y - min_y, xsize)->g;
+					b += wc * pix(dst, x2, y - min_y, xsize)->b;
 					n += wc;
 				}
 			}
@@ -95,6 +95,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 			pix(src,x,y, xsize)->b = b/n;
 		}
 	}
+	free(dst);
 }
 
 
