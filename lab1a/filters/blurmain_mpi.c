@@ -192,7 +192,7 @@ int main (int argc, char ** argv)
 
 	if(rank == 0){
 		blurfilter(xsize, (sizes[rank]+margin)/xsize, src, radius, w, 0,
-			(sizes[rank]+margin)/xsize);
+			sizes[rank]/xsize);
 	}
 	else{
 		MPI_Status status_pre;
@@ -202,17 +202,17 @@ int main (int argc, char ** argv)
 			MPI_Status status_post;
 			MPI_Wait(&req_suffix, &status_post);
 
-			blurfilter(xsize, (2*margin+sizes[rank])/xsize, chunk, radius, w, 0,
-			 	(2*margin+sizes[rank])/xsize);
+			blurfilter(xsize, (2*margin+sizes[rank])/xsize, chunk, radius, w,
+				margin/xsize, (margin+sizes[rank])/xsize);
 		}
 		else{
-			blurfilter(xsize, (margin+sizes[rank])/xsize, chunk, radius, w, 0,
-			(margin+sizes[rank])/xsize);
+			blurfilter(xsize, (margin+sizes[rank])/xsize, chunk, radius, w,
+				margin/xsize, (margin+sizes[rank])/xsize);
 		}
 	}
 
 	// Make sure that every process is done before we gather the data
-	MPI_Barrier(MPI_COMM_WORLD);
+	//MPI_Barrier(MPI_COMM_WORLD);
 
 	if(p != 1){
 		// Gather chunks without their margin from all non root processes

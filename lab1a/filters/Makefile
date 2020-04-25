@@ -1,6 +1,6 @@
 CC = icc
 CFLAGS =
-LFLAGS = -lpthread -lrt -lm
+LFLAGS = -lpthread -lrt -lm -O3
 
 all: blurc thresc
 

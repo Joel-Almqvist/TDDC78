@@ -16,10 +16,9 @@ void blurfilter(const int xsize, const int ysize, pixel* src,
 
 
 	typedef struct _blur_args {
-		int xsize, ysize, radius, min_y, max_y;
+		int xsize, ysize, radius, min, max;
 		double* w;
 		pixel* src;
-		pixel* dst;
 		//pthread_rwlock_t* rw_ptr;
 	} blur_args;
 
