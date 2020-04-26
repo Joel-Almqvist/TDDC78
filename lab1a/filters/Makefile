@@ -21,6 +21,3 @@ blurmpi: ppmio.o gaussw.o blurfilter.o
 
 threshmpi: ppmio.o thresfilter.o
 		mpicc -std=c99 -o threshmpi ppmio.o thresfilter.o threshmain_mpi.c $(LFLAGS)
-
-blurpt: ppmio.o gaussw.o blurfilter.o
-	$(CC) -o blurpt ppmio.o gaussw.o blurfilter.o blurmain_pthreads.c $(LFLAGS)

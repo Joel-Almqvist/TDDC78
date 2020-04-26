@@ -8,6 +8,7 @@
 #include <math.h>
 #include "mpi.h"
 
+
 #define MAX_RAD 1000
 
 // rm blurmpi
