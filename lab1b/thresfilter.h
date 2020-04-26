@@ -11,10 +11,25 @@ typedef struct _pixel {
 	unsigned char r,g,b;
 } pixel;
 
+
+typedef struct _thresh_sum_args {
+	int xsize, y_min, y_max;
+	pixel* src;
+	uint* return_val;
+} thresh_sum_args;
+
+
+typedef struct _thresh_exec_args {
+	int xsize, y_min, y_max;
+	pixel* src;
+	uint avg;
+} thresh_exec_args;
+
+
 void thresfilter(const int xsize, const int ysize, pixel* src);
 
-void threshfilter_exec(const int xsize, const int ysize, pixel* src, unsigned int inc_sum);
+void* threshfilter_exec(void* args);
 
-unsigned int threshfilter_sum(const int xsize, const int ysize, pixel* src);
+void* threshfilter_sum(void* args);
 
 #endif

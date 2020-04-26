@@ -2,10 +2,10 @@ CC = icc
 CFLAGS =
 LFLAGS = -lpthread -lrt -lm -O3
 
-all: blurpt
+all: blurpt threshpt
 
 clean:
-	-$(RM) *.o blurc thresc blurmpi threshmpi
+	-$(RM) *.o blurc thresc blurmpi threshmpi threshpt
 
 
 arc:
@@ -13,3 +13,6 @@ arc:
 
 blurpt: ppmio.o gaussw.o blurfilter.o
 	$(CC) -o blurpt ppmio.o gaussw.o blurfilter.o blurmain_pthreads.c $(LFLAGS)
+
+threshpt: ppmio.o thresfilter.o
+		$(CC) -o threshpt ppmio.o thresfilter.o threshmain_pthreads.c $(LFLAGS)
