@@ -17,14 +17,10 @@ typedef struct _pixel {
 		int xsize, ysize, radius, min_y, max_y;
 		double* w;
 		pixel* src;
+		pixel* buffer;
 		pthread_barrier_t* barrier;
-		//pthread_rwlock_t* rw_ptr;
 	} blur_args;
 
-
-	// void blurfilter_pt(const int xsize, const int ysize, pixel* src,
-	// 	const int radius, const double *w, const int min_y,
-	// 	const int max_y, pixel* dst);
 
 	void* blurfilter_pt(void* args);
 

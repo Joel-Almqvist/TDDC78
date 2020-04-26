@@ -8,24 +8,22 @@
 #include <pthread.h>
 
 #define MAX_RAD 1000
-#define NR_THREADS 4
 
 // rm blurpt
 // make blurpt
-// ./blurpt 2 data/im1.ppm data/im1-filtered-pt.ppm
+// ./blurpt 10 4 data/im1.ppm data/im1-filtered-pt.ppm
 int main (int argc, char ** argv)
 {
 
-	int radius, xsize, ysize, colmax;
+	int radius, xsize, ysize, colmax, nr_threads;
 	pixel *src = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
-  pixel *dest = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
 	struct timespec stime, etime;
 	double w[MAX_RAD];
 
 	/* Take care of the arguments */
-	if (argc != 4)
+	if (argc != 5)
 	{
-		fprintf(stderr, "Usage: %s radius infile outfile\n", argv[0]);
+		fprintf(stderr, "Usage: %s radius #threads infile outfile\n", argv[0]);
 		exit(1);
 	}
 
@@ -36,11 +34,17 @@ int main (int argc, char ** argv)
 		exit(1);
 	}
 
+	nr_threads = atoi(argv[2]);
+
+	if( nr_threads > 128 || nr_threads < 1){
+		fprintf(stderr, "Must use between 1 and 128 threads\n");
+		exit(1);
+	}
 
 	clock_gettime(CLOCK_REALTIME, &stime);
 
 	/* Read file */
-	if (read_ppm (argv[2], &xsize, &ysize, &colmax, (char *) src) != 0)
+	if (read_ppm (argv[3], &xsize, &ysize, &colmax, (char *) src) != 0)
 		exit(1);
 
 	clock_gettime(CLOCK_REALTIME, &etime);
@@ -58,29 +62,35 @@ int main (int argc, char ** argv)
 
 	get_gauss_weights(radius, w);
 
+	// Exec start time
+	clock_gettime(CLOCK_REALTIME, &stime);
 
-  blur_args* args = malloc(sizeof(blur_args) * NR_THREADS);
-  const int step = ysize / NR_THREADS;
+
+  blur_args* args = malloc(sizeof(blur_args) * nr_threads);
+  const int step = ysize / nr_threads;
 
 	pthread_barrier_t barrier;
+	pthread_barrier_init(&barrier, NULL, nr_threads);
+
+	pixel *buffer = (pixel*) malloc(sizeof(pixel) * MAX_PIXELS);
 
   // Generate arguments
-  for(int i = 0; i < NR_THREADS; i++){
-    if(i == NR_THREADS - 1){
+  for(int i = 0; i < nr_threads; i++){
+    if(i == nr_threads - 1){
       args[i] = (blur_args){xsize, ysize, radius, i*step, ysize, w,
-        src, &barrier};
+        src, buffer, &barrier};
     }
     else{
-      args[i] = (blur_args){xsize, ysize, radius, i*step, (i+1)*step - 1, w,
-        src, &barrier};
+      args[i] = (blur_args){xsize, ysize, radius, i*step, (i+1)*step, w,
+        src, buffer, &barrier};
     }
   }
 
-  pthread_t threads[NR_THREADS];
+  pthread_t threads[nr_threads];
   int ret;
-	clock_gettime(CLOCK_REALTIME, &stime);
+	//clock_gettime(CLOCK_REALTIME, &stime);
 
-  for(int i = 0; i < NR_THREADS; i++){
+  for(int i = 0; i < nr_threads; i++){
     ret = pthread_create(&threads[i], NULL, blurfilter_pt, args+i);
     if(ret){
       printf("ERROR! Return code: %d\n", ret);
@@ -88,9 +98,13 @@ int main (int argc, char ** argv)
     }
   }
 
-  for(int i = 0; i < NR_THREADS; i++){
+  for(int i = 0; i < nr_threads; i++){
     pthread_join(threads[i], NULL);
   }
+
+	// Exec end time
+	clock_gettime(CLOCK_REALTIME, &etime);
+
 
   printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
   1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
@@ -98,6 +112,6 @@ int main (int argc, char ** argv)
 
 
 	printf("Writing output file\n");
-	if(write_ppm (argv[3], xsize, ysize, (char *)dest) != 0)
+	if(write_ppm (argv[4], xsize, ysize, (char *)src) != 0)
 		exit(1);
 }
