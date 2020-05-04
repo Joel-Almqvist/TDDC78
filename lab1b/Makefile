@@ -1,6 +1,6 @@
 CC = icc
 CFLAGS =
-LFLAGS = -lpthread -lrt -lm -O3
+LFLAGS = -lpthread -lrt -lm -O3 -std=gnu99
 
 all: blurpt threshpt
 

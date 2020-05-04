@@ -42,7 +42,8 @@ void thresfilter(const int xsize, const int ysize, pixel* src)
 		uint sum = 0;
 		int max_size = y_max * xsize;
 
-		for (uint i = y_min * xsize;  i < max_size; i++)
+		uint i;
+		for ( i = y_min * xsize;  i < max_size; i++)
 		{
 			sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
 		}
