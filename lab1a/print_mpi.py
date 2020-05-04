@@ -6,8 +6,8 @@ import matplotlib.patches as mpatches
 #    3.582518, 4.653898], color="blue")
 
 # Thresh
-plt.plot([1, 2,4,8], [0.014573, 0.011328,0.009878, 0.014445 \
-    ], color="blue")
+plt.plot([1, 2,4,8, 16, 32, 48, 64], [0.032898, 0.019358, 0.014583, 0.014164, \
+    0.012262, 0.011100, 0.011128, 0.011727], color="blue")
 
 
 
@@ -65,5 +65,5 @@ plt.ylabel("Seconds")
 plt.xlabel("Number of tasks")
 plt.title("Blur MPI execution time on 3000x3000")
 
-plt.savefig("blurmpi_mpi_v2")
+plt.savefig("blur_mpi")
 #plt.show()
