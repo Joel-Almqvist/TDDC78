@@ -165,7 +165,6 @@ int main (int argc, char ** argv)
     threshfilter_exec(xsize, sizes[rank]/xsize, chunk, avg);
   }
 
-  MPI_Barrier(MPI_COMM_WORLD);
   MPI_Gatherv(chunk, sizes_to_send[rank], pixel_mpi, src, sizes_to_send,
     displacements, pixel_mpi, 0, MPI_COMM_WORLD);
 
