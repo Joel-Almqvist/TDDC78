@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
 			for(int i = 0; i < nr_threads; ++i){
 				tot_error = fmax(tot_error, error[rank]);
 			}
-			nr_its = k;
+			nr_its = k + 1;
 			#pragma omp flush(tot_error)
 		}
 
