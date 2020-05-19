@@ -9,7 +9,7 @@
 #include "coordinate.h"
 #include "definitions.h"
 #include "physics.h"
-
+#include "linked_list.h"
 //Feel free to change this program to facilitate parallelization.
 
 float rand1(){
@@ -123,84 +123,59 @@ int main(int argc, char** argv){
 
 	int nr_rows;
 	int nr_cols;
-	// The border are inclusive
+
 	double border_right, border_left, border_top, border_bot;
 
 	set_box_limits(&nr_rows, &nr_cols, nr_proc, rank, &border_top,
 		&border_right, &border_bot, &border_left);
 
 
-	exit(0);
 
 
-	/* Initialize */
-	// 1. set the walls
-	cord_t wall;
-	wall.y0 = wall.x0 = 0;
-	wall.x1 = BOX_HORIZ_SIZE;
-	wall.y1 = BOX_VERT_SIZE;
+	particle_list particles;
 
-
-	// 2. allocate particle bufer and initialize the particles
-	pcord_t *particles = (pcord_t*) malloc(INIT_NO_PARTICLES*sizeof(pcord_t));
-	bool *collisions=(bool *)malloc(INIT_NO_PARTICLES*sizeof(bool) );
-
-	srand( time(NULL) + 1234 );
-
-	float r, a;
-	for(int i=0; i<INIT_NO_PARTICLES; i++){
-		// initialize random position
-		particles[i].x = wall.x0 + rand1()*BOX_HORIZ_SIZE;
-		particles[i].y = wall.y0 + rand1()*BOX_VERT_SIZE;
-
-		// initialize random velocity
-		r = rand1()*MAX_INITIAL_VELOCITY;
-		a = rand1()*2*PI;
-		particles[i].vx = r*cos(a);
-		particles[i].vy = r*sin(a);
+	int my_start_partition;
+	if(rank == nr_proc - 1){
+		my_start_partition = INIT_NO_PARTICLES / nr_proc + INIT_NO_PARTICLES % nr_proc;
+	}
+	else{
+		my_start_partition = INIT_NO_PARTICLES / nr_proc;
 	}
 
 
-	unsigned int p, pp;
 
-	/* Main loop */
-	for (time_stamp=0; time_stamp<time_max; time_stamp++) { // for each time stamp
+	init(&particles);
 
-		init_collisions(collisions, INIT_NO_PARTICLES);
+	srand(time(NULL));
 
-		for(p=0; p<INIT_NO_PARTICLES; p++) { // for all particles
-			if(collisions[p]) continue;
+	float x;
+	float y;
+	float vx;
+	float vy;
+	float theta;
+	float absv;
 
-			/* check for collisions */
-			for(pp=p+1; pp<INIT_NO_PARTICLES; pp++){
-				if(collisions[pp]) continue;
-				float t=collide(&particles[p], &particles[pp]);
-				if(t!=-1){ // collision
-					collisions[p]=collisions[pp]=1;
-					interact(&particles[p], &particles[pp], t);
-					break; // only check collision of two particles
-				}
-			}
+	for(int i = 0; i <= my_start_partition; i++){
 
-		}
+		x = ((float) rand() / (float) RAND_MAX) * (border_right - border_left) + border_right;
+		y = ((float) rand() / (float) RAND_MAX) * (border_bot - border_top) + border_top;
 
-		// move particles that has not collided with another
-		for(p=0; p<INIT_NO_PARTICLES; p++)
-			if(!collisions[p]){
-				feuler(&particles[p], 1);
+		theta = ((float) rand()/ (float) RAND_MAX) * (2 * PI);
+		absv = ((float) rand()/ (float) RAND_MAX) * 50;
 
-				/* check for wall interaction and add the momentum */
-				pressure += wall_collide(&particles[p], wall);
-			}
+		//printf("x = %f, y = %f, theta = %f, absv = %f\n", x, y, theta, absv);
+
+		vx = absv * cos(theta);
+		vy = absv* sin(theta);
+
+		//printf("vx = %f, vy = %f\n\n", vx, vy);
 
 
+		append(&particles, create_particle(x, y, vx, vy));
 	}
 
 
-	printf("Average pressure = %f\n", pressure / (WALL_LENGTH*time_max));
 
-	free(particles);
-	free(collisions);
 
 	return 0;
 
