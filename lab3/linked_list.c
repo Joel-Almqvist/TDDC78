@@ -1,4 +1,6 @@
 #include "linked_list.h"
+#include <stdbool.h>
+#include <stdio.h>
 
 
 void init(particle_list* list){
@@ -22,13 +24,31 @@ plist_elem* create_particle(float x, float y, float vx, float vy){
   return this;
 }
 
+void psize(particle_list* list){
+  int i = 0;
+
+  plist_elem* elem = list->first;
+  while(true){
+
+    if(elem == NULL){
+      break;
+    }
+
+    ++i;
+    elem = elem->next;
+  }
+  printf("List size is %i\n", i);
+
+
+}
 
 void append(particle_list* list, plist_elem* elem){
-  plist_elem* empty = list->last;
+  elem->next = NULL;
 
-  if(empty == NULL){
+  if(list->last == NULL){
     list->first = elem;
     list->last = elem;
+    elem->prev = NULL;
   }
   else{
     elem->prev = list->last;
@@ -48,14 +68,18 @@ void remove_particle(particle_list* list, plist_elem* elem){
 
   // Removing our first element
   if(elem->prev == NULL){
+
     list->first = elem->next;
 
     // Removing our only element
-    if(list->last == elem){
+    if(elem->next == NULL){
       list->last = NULL;
     }
+    else{
+      elem->next->prev = NULL;
+    }
     elem->next = NULL;
-    elem-> prev = NULL;
+    elem->prev = NULL;
     return;
   }
 
@@ -68,8 +92,9 @@ void remove_particle(particle_list* list, plist_elem* elem){
   // Removing middle element
   else{
     elem->prev->next = elem->next;
+    elem->next->prev = elem->prev;
   }
-  
+
   elem->next = NULL;
   elem-> prev = NULL;
 }
