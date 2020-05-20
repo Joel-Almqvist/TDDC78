@@ -91,6 +91,8 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 
 /* Searches the list for collisions, removes any colliding elements
  * and adds them to the collision list.
+ *
+ * Also interacts two colliding elements
 */
 plist_elem* search_collision(particle_list* particles, plist_elem* start,
 	particle_list* collisions){
@@ -188,7 +190,9 @@ int main(int argc, char** argv){
 
 
 	particle_list particles;
+	init(&particles);
 	particle_list collisions;
+	init(&collisions);
 
 	int my_start_partition;
 	if(rank == nr_proc - 1){
@@ -200,7 +204,7 @@ int main(int argc, char** argv){
 
 
 
-	init(&particles);
+
 
 	srand(time(NULL));
 
@@ -226,8 +230,19 @@ int main(int argc, char** argv){
 		append(&particles, create_particle(x, y, vx, vy));
 	}
 
+
+	// Create the wall
+	cord_t wall;
+	wall.y0 = wall.x0 = 0;
+	wall.x1 = BOX_HORIZ_SIZE;
+	wall.y1 = BOX_VERT_SIZE;
+
+
+
+
 	plist_elem* part = particles.first;
 
+	// Collide all elements and remove collided elements from particles
 	while(true){
 		part = search_collision(&particles, part,  &collisions);
 
@@ -237,17 +252,42 @@ int main(int argc, char** argv){
 	}
 
 
-	// 1 - Interact all consecutive elements in collision
+	particle_list parts_to_send;
+	init(&parts_to_send);
 
-	// 2 - Move all elements in particles
+	part = collisions.first;
+	pcord_t* mcord;
+	plist_elem* next_part;
+	while(true){
+		if(part == NULL){
+			break;
+		}
 
-	// 3 - Send all which move out of bounds
+		mcord = &(part->this.pcord);
 
-	// 4 - Repeat for all iterations
+		feuler(mcord, 1);
+		pressure += wall_collide(mcord, wall);
 
+		// Removing an element from the list destroys its next reference
+		next_part = part->next;
 
+		// Move particles to default particle list or to send list
+		remove_particle(&collisions, part);
 
+		if(mcord->y < border_top || mcord->y > border_bot || mcord->x < border_left
+			|| mcord->x > border_right){
+				append(&parts_to_send, part);
+			}
+		else{
+			append(&particles, part);
+		}
 
+		part = next_part;
+	}
+
+	// 1 - Move particles to correct send buffer
+	// 2 - Receive particles and add them to list
+	// 3 - Loop for all iterations
 
 
 	return 0;
