@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
-
+#include <string.h>
 #include <mpi.h>
 
 #include "coordinate.h"
@@ -20,6 +20,19 @@ float rand1(){
 int* denoms(int x){
 	int* denom = malloc(sizeof(int) * 2);
 	int n = 0;
+
+
+	if(x == 4){
+		denom[0] = 2;
+		denom[1] = 2;
+		return denom;
+	}
+
+	if(x == 2){
+		denom[0] = 2;
+		denom[1] = 1;
+		return denom;
+	}
 
 	for(int i = x - 2; i > 1; --i){
 		if(x % i == 0){
@@ -38,7 +51,7 @@ int* denoms(int x){
 
 void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 		int nr_proc, int rank, double* border_top, double* border_right,
-		double* border_bot, double* border_left){
+		double* border_bot, double* border_left, int* dest, int* nr_neighbors){
 
 			int* den = denoms(nr_proc);
 			if(den[0] == 1){
@@ -55,8 +68,9 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 
 
 			// These are zero indexed
-			int my_col = (rank) % nr_cols;
-			int my_row = (rank + 1) / nr_rows;
+			int my_col = rank % nr_cols;
+			int my_row = rank / nr_cols;
+
 
 			double x_border_left = my_col * x_step;
 			double x_border_right;
@@ -85,6 +99,43 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 
 			*nr_rows_ret = nr_rows;
 			*nr_cols_ret = nr_cols;
+
+
+
+			// Find our neighbors in the grid
+			*nr_neighbors = 0;
+			if(my_row != 0){
+				*nr_neighbors += 1;
+				dest[0] = (my_row - 1) * nr_cols + my_col;
+			}
+			else{
+				dest[0] = -1;
+			}
+
+			if(my_row != nr_rows - 1){
+				*nr_neighbors += 1;
+				dest[1] = (my_row + 1) * nr_cols + my_col;
+			}
+			else{
+				dest[1] = -1;
+			}
+
+			if(my_col != 0){
+				*nr_neighbors += 1;
+				dest[2] = rank - 1;
+			}
+			else{
+				dest[2] = -1;
+			}
+
+			if(my_col != nr_cols - 1){
+				*nr_neighbors += 1;
+				dest[3] = rank + 1;
+			}
+			else{
+				dest[3] = -1;
+			}
+
 
 			free(den);
 		}
@@ -146,12 +197,8 @@ plist_elem* search_collision(particle_list* particles, plist_elem* start,
 	return start->next;
 }
 
-
-
+// mpirun -np 6 --oversubscribe par 4
 int main(int argc, char** argv){
-
-
-
 	unsigned int time_stamp = 0, time_max;
 	float pressure = 0;
 
@@ -165,34 +212,42 @@ int main(int argc, char** argv){
 	time_max = atoi(argv[1]);
 
 
-
-
 	int nr_proc;   // number of started MPI processes
 	int rank;  // my rank
-	MPI_Status status;
 	MPI_Init( &argc, &argv );
 	MPI_Comm_size( MPI_COMM_WORLD, &nr_proc );
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
-	// TODO change this
-	nr_proc = 6;
-	rank = 4;
+
+	// buffer_size is a design variable
+	int buffer_size = INIT_NO_PARTICLES / nr_proc;
+	particle_t* rec_buff = malloc(buffer_size * sizeof(particle_t));
+	particle_t* send_buff = malloc(buffer_size * sizeof(particle_t));
+	MPI_Status status[4];
+	MPI_Request	mpi_rq[4];
 
 	int nr_rows;
 	int nr_cols;
+	int nr_neighbors;
+	int dest[4];
+
 
 	double border_right, border_left, border_top, border_bot;
 
 	set_box_limits(&nr_rows, &nr_cols, nr_proc, rank, &border_top,
-		&border_right, &border_bot, &border_left);
+		&border_right, &border_bot, &border_left, dest, &nr_neighbors);
 
-
-
-
+	// All particles (may change during an iteration)
 	particle_list particles;
 	init(&particles);
+
+	// All colliding particles
 	particle_list collisions;
 	init(&collisions);
+
+	// All particles that has left our box
+	particle_list parts_to_send;
+	init(&parts_to_send);
 
 	int my_start_partition;
 	if(rank == nr_proc - 1){
@@ -201,9 +256,6 @@ int main(int argc, char** argv){
 	else{
 		my_start_partition = INIT_NO_PARTICLES / nr_proc;
 	}
-
-
-
 
 
 	srand(time(NULL));
@@ -226,7 +278,6 @@ int main(int argc, char** argv){
 		vx = absv * cos(theta);
 		vy = absv* sin(theta);
 
-
 		append(&particles, create_particle(x, y, vx, vy));
 	}
 
@@ -238,9 +289,11 @@ int main(int argc, char** argv){
 	wall.y1 = BOX_VERT_SIZE;
 
 
+	// Used to iterate through linked list
+	plist_elem* part;
+	for(int iteration = 0; iteration < time_max; ++iteration){
 
-
-	plist_elem* part = particles.first;
+	part = particles.first;
 
 	// Collide all elements and remove collided elements from particles
 	while(true){
@@ -252,9 +305,6 @@ int main(int argc, char** argv){
 	}
 
 
-	particle_list parts_to_send;
-	init(&parts_to_send);
-
 	part = collisions.first;
 	pcord_t* mcord;
 	plist_elem* next_part;
@@ -262,7 +312,6 @@ int main(int argc, char** argv){
 		if(part == NULL){
 			break;
 		}
-
 		mcord = &(part->this.pcord);
 
 		feuler(mcord, 1);
@@ -271,25 +320,119 @@ int main(int argc, char** argv){
 		// Removing an element from the list destroys its next reference
 		next_part = part->next;
 
-		// Move particles to default particle list or to send list
+		// We empty collision list each iteration
 		remove_particle(&collisions, part);
 
 		if(mcord->y < border_top || mcord->y > border_bot || mcord->x < border_left
 			|| mcord->x > border_right){
+				// This particle has left our box, move it to send list
 				append(&parts_to_send, part);
 			}
 		else{
+			// Move particle back to particle list
 			append(&particles, part);
 		}
 
 		part = next_part;
 	}
 
-	// 1 - Move particles to correct send buffer
-	// 2 - Receive particles and add them to list
-	// 3 - Loop for all iterations
+
+	int offset = buffer_size / 4;
+	size_t sizeb = sizeof(particle_t);
+	part = parts_to_send.first;
+	int send_sizes[4] = {0,0,0,0};
+
+	while(true){
+		if(part == NULL){
+			break;
+		}
+
+		mcord = &(part->this.pcord);
+
+		if(mcord->y < border_top){
+			memcpy(send_buff, &part->this, sizeb);
+			send_sizes[0] += 1;
+		}
+		else if(mcord->y > border_bot){
+			memcpy(send_buff + offset, &part->this, sizeb);
+			send_sizes[1] += 1;
+		}
+		else if( mcord->x < border_left){
+			memcpy(send_buff + 2 * offset, &part->this, sizeb);
+			send_sizes[2] += 1;
+		}
+		else{
+			memcpy(send_buff + 3 * offset, &part->this, sizeb);
+			send_sizes[3] += 1;
+			// mcord->x > border_right == true
+		}
+
+		next_part = part->next;
+		free(part);
+		part = part->next;
+	}
 
 
+	for(int i = 0; i < 4; ++i){
+		if(dest[i] == -1){
+			continue;
+		}
+
+		MPI_Isend(send_buff, send_sizes[i] * sizeof(particle_t), MPI_BYTE, dest[i],
+			i, MPI_COMM_WORLD, mpi_rq + i);
+	}
+
+	for(int i = 0; i < 4; ++i){
+		if(dest[i] == -1){
+			continue;
+		}
+
+		MPI_Recv(rec_buff + i * offset, offset * sizeof(particle_t), MPI_BYTE, dest[i],
+				MPI_ANY_TAG, MPI_COMM_WORLD, status + i);
+	}
+
+
+	int rec_count = 0;
+	for(int i = 0; i < 4; ++i){
+		if(dest[i] == -1){
+			continue;
+		}
+
+		MPI_Get_count(status + i, MPI_BYTE, &rec_count);
+		rec_count /= sizeof(particle_t);
+
+		// TODO remove this once Im sure that it works
+		if(rec_count != 0){
+			printf("%i received %i\n", rank, rec_count);
+			psize(&particles);
+		}
+
+		for(int j = 0; j < rec_count; ++j){
+			particle_t* rec_part = rec_buff + j + (offset * i);
+			pcord_t* rec_cord = &(rec_part->pcord);
+
+			append(&particles, create_particle(rec_cord->x, rec_cord->y,
+				 	rec_cord->vx, rec_cord->y));
+
+		}
+
+		// TODO remove this once Im sure that it works
+		if(rec_count != 0){
+			psize(&particles);
+		}
+
+	}
+
+	// TODO remove this
+	printf("End of iteration %i\n", iteration);
+} // End of the iteration
+
+
+	// 3 - Loop for all iterations, need barrier
+	// 4 - Collect sum of momentum at the end of each iteration
+
+
+	MPI_Finalize();
 	return 0;
 
 }
