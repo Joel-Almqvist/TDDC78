@@ -16,10 +16,6 @@ float rand1(){
 	return (float)( rand()/(float) RAND_MAX );
 }
 
-void init_collisions(bool *collisions, unsigned int max){
-	for(unsigned int i=0;i<max;++i)
-		collisions[i]=0;
-}
 
 int* denoms(int x){
 	int* denom = malloc(sizeof(int) * 2);
@@ -93,7 +89,66 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 			free(den);
 		}
 
+/* Searches the list for collisions, removes any colliding elements
+ * and adds them to the collision list.
+*/
+plist_elem* search_collision(particle_list* particles, plist_elem* start,
+	particle_list* collisions){
+
+	bool collided = false;
+	float t = -1;
+
+	plist_elem* part = start->next;
+
+	if(part == NULL){
+		return NULL;
+	}
+
+	// Iterate over every following particle
+	while(true){
+
+
+
+
+		t = collide(&(start->this.pcord), &(part->this.pcord));
+
+		if(t != -1){
+			interact(&(start->this.pcord), &(part->this.pcord), t);
+
+			plist_elem* next_elem;
+
+			if(start->next == part){
+				next_elem = part->next;
+			}
+			else{
+				next_elem = start->next;
+			}
+
+			remove_particle(particles, start);
+			remove_particle(particles, part);
+
+			append(collisions, start);
+			append(collisions, part);
+
+			// We only collide once per iteration
+			return next_elem;
+		}
+
+		if(part->next == NULL){
+			break;
+		}
+		else{
+			part = part->next;
+		}
+	}
+	return start->next;
+}
+
+
+
 int main(int argc, char** argv){
+
+
 
 	unsigned int time_stamp = 0, time_max;
 	float pressure = 0;
@@ -133,6 +188,7 @@ int main(int argc, char** argv){
 
 
 	particle_list particles;
+	particle_list collisions;
 
 	int my_start_partition;
 	if(rank == nr_proc - 1){
@@ -163,16 +219,33 @@ int main(int argc, char** argv){
 		theta = ((float) rand()/ (float) RAND_MAX) * (2 * PI);
 		absv = ((float) rand()/ (float) RAND_MAX) * 50;
 
-		//printf("x = %f, y = %f, theta = %f, absv = %f\n", x, y, theta, absv);
-
 		vx = absv * cos(theta);
 		vy = absv* sin(theta);
-
-		//printf("vx = %f, vy = %f\n\n", vx, vy);
 
 
 		append(&particles, create_particle(x, y, vx, vy));
 	}
+
+	plist_elem* part = particles.first;
+
+	while(true){
+		part = search_collision(&particles, part,  &collisions);
+
+		if(part == NULL){
+			break;
+		}
+	}
+
+
+	// 1 - Interact all consecutive elements in collision
+
+	// 2 - Move all elements in particles
+
+	// 3 - Send all which move out of bounds
+
+	// 4 - Repeat for all iterations
+
+
 
 
 
