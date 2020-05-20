@@ -9,6 +9,8 @@ struct particle {
   pcord_t  pcord;
   int ptype;
 };
+
+typedef struct particle particle_t;
 */
 
 /*
