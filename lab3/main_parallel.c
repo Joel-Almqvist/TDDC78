@@ -218,7 +218,7 @@ int main(int argc, char** argv){
 
 
 	// buffer_size is a design variable, we are very unlikely to need this muchs
-	int buffer_size = MAX_NO_PARTICLES;
+	int buffer_size = INIT_NO_PARTICLES;
 	particle_t* rec_buff = malloc(buffer_size * sizeof(particle_t));
 	particle_t* send_buff = malloc(buffer_size * sizeof(particle_t));
 	MPI_Status status[4];
