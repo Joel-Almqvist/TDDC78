@@ -40,7 +40,7 @@ typedef struct _particle_list {
 void append(particle_list* list, plist_elem* elem);
 void remove_particle(particle_list* list, plist_elem* elem);
 
-void psize(particle_list* list);
+void psize(particle_list* list, int rank);
 
 void init(particle_list* list);
 

@@ -24,7 +24,7 @@ plist_elem* create_particle(float x, float y, float vx, float vy){
   return this;
 }
 
-void psize(particle_list* list){
+void psize(particle_list* list, int rank){
   int i = 0;
 
   plist_elem* elem = list->first;
@@ -37,7 +37,7 @@ void psize(particle_list* list){
     ++i;
     elem = elem->next;
   }
-  printf("List size is %i\n", i);
+  printf("%i has a list size of %i\n", rank, i);
 
 
 }

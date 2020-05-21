@@ -200,7 +200,8 @@ plist_elem* search_collision(particle_list* particles, plist_elem* start,
 // mpirun -np 6 --oversubscribe par 4
 int main(int argc, char** argv){
 	unsigned int time_stamp = 0, time_max;
-	float pressure = 0;
+	double my_pressure = 0;
+	double global_pressure = 0;
 
 	// parse arguments
 	if(argc != 2) {
@@ -220,7 +221,7 @@ int main(int argc, char** argv){
 
 
 	// buffer_size is a design variable
-	int buffer_size = INIT_NO_PARTICLES / nr_proc;
+	int buffer_size = 2*(MAX_NO_PARTICLES / nr_proc);
 	particle_t* rec_buff = malloc(buffer_size * sizeof(particle_t));
 	particle_t* send_buff = malloc(buffer_size * sizeof(particle_t));
 	MPI_Status status[4];
@@ -315,7 +316,7 @@ int main(int argc, char** argv){
 		mcord = &(part->this.pcord);
 
 		feuler(mcord, 1);
-		pressure += wall_collide(mcord, wall);
+		my_pressure += wall_collide(mcord, wall);
 
 		// Removing an element from the list destroys its next reference
 		next_part = part->next;
@@ -336,12 +337,11 @@ int main(int argc, char** argv){
 		part = next_part;
 	}
 
-
 	int offset = buffer_size / 4;
 	size_t sizeb = sizeof(particle_t);
-	part = parts_to_send.first;
 	int send_sizes[4] = {0,0,0,0};
 
+	part = parts_to_send.first;
 	while(true){
 		if(part == NULL){
 			break;
@@ -350,27 +350,31 @@ int main(int argc, char** argv){
 		mcord = &(part->this.pcord);
 
 		if(mcord->y < border_top){
-			memcpy(send_buff, &part->this, sizeb);
+			memcpy(send_buff + send_sizes[0], &part->this, sizeb);
 			send_sizes[0] += 1;
 		}
 		else if(mcord->y > border_bot){
-			memcpy(send_buff + offset, &part->this, sizeb);
+			memcpy(send_buff + offset + send_sizes[1], &part->this, sizeb);
 			send_sizes[1] += 1;
 		}
 		else if( mcord->x < border_left){
-			memcpy(send_buff + 2 * offset, &part->this, sizeb);
+			memcpy(send_buff + send_sizes[2] + 2 * offset, &part->this, sizeb);
 			send_sizes[2] += 1;
 		}
 		else{
-			memcpy(send_buff + 3 * offset, &part->this, sizeb);
+			memcpy(send_buff + send_sizes[3] + 3 * offset, &part->this, sizeb);
 			send_sizes[3] += 1;
 			// mcord->x > border_right == true
 		}
 
+
 		next_part = part->next;
 		free(part);
-		part = part->next;
+		part = next_part;
 	}
+
+	// The list is now empty, re initialize
+	init(&parts_to_send);
 
 
 	for(int i = 0; i < 4; ++i){
@@ -379,7 +383,7 @@ int main(int argc, char** argv){
 		}
 
 		MPI_Isend(send_buff, send_sizes[i] * sizeof(particle_t), MPI_BYTE, dest[i],
-			i, MPI_COMM_WORLD, mpi_rq + i);
+			iteration, MPI_COMM_WORLD, mpi_rq + i);
 	}
 
 	for(int i = 0; i < 4; ++i){
@@ -388,7 +392,7 @@ int main(int argc, char** argv){
 		}
 
 		MPI_Recv(rec_buff + i * offset, offset * sizeof(particle_t), MPI_BYTE, dest[i],
-				MPI_ANY_TAG, MPI_COMM_WORLD, status + i);
+				iteration, MPI_COMM_WORLD, status + i);
 	}
 
 
@@ -404,7 +408,7 @@ int main(int argc, char** argv){
 		// TODO remove this once Im sure that it works
 		if(rec_count != 0){
 			printf("%i received %i\n", rank, rec_count);
-			psize(&particles);
+			psize(&particles, rank);
 		}
 
 		for(int j = 0; j < rec_count; ++j){
@@ -418,16 +422,22 @@ int main(int argc, char** argv){
 
 		// TODO remove this once Im sure that it works
 		if(rec_count != 0){
-			psize(&particles);
+			psize(&particles, rank);
 		}
-
 	}
 
 	// TODO remove this
 	printf("End of iteration %i\n", iteration);
-} // End of the iteration
+	} // End of the iteration
 
+	/*
+	MPI_Reduce(&my_pressure, &global_pressure, 1, MPI_DOUBLE,
+		 	MPI_SUM, 0, MPI_COMM_WORLD);
 
+	if(rank == 0){
+		printf("Average pressure = %f\n", global_pressure / (WALL_LENGTH*time_max));
+	}
+*/
 	// 3 - Loop for all iterations, need barrier
 	// 4 - Collect sum of momentum at the end of each iteration
 
