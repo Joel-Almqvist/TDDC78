@@ -24,6 +24,23 @@ plist_elem* create_particle(float x, float y, float vx, float vy){
   return this;
 }
 
+
+int psize_get(particle_list* list){
+  int i = 0;
+
+  plist_elem* elem = list->first;
+  while(true){
+
+    if(elem == NULL){
+      break;
+    }
+
+    ++i;
+    elem = elem->next;
+  }
+  return i;
+}
+
 void psize(particle_list* list, int rank){
   int i = 0;
 
@@ -97,4 +114,21 @@ void remove_particle(particle_list* list, plist_elem* elem){
 
   elem->next = NULL;
   elem-> prev = NULL;
+}
+
+
+void merge_plists(particle_list* from, particle_list* to){
+
+  plist_elem* elem = from->first;
+  plist_elem* elem_temp;
+
+  while(elem != NULL){
+    elem_temp = elem->next;
+
+    //remove_particle(from, elem);
+    append(to, elem);
+
+    elem = elem->next;
+  }
+  init(from);
 }

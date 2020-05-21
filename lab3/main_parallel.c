@@ -55,7 +55,8 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 
 			int* den = denoms(nr_proc);
 			if(den[0] == 1){
-				printf("Unable to divide the task for %i processes\n", nr_proc);
+				printf("Unable to divide the task for %i processes choose an even "
+					"integer of size 2 or more\n", nr_proc);
 				MPI_Finalize();
 				exit(1);
 			}
@@ -101,7 +102,6 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 			*nr_cols_ret = nr_cols;
 
 
-
 			// Find our neighbors in the grid
 			*nr_neighbors = 0;
 			if(my_row != 0){
@@ -136,7 +136,6 @@ void set_box_limits(int* nr_rows_ret, int* nr_cols_ret,
 				dest[3] = -1;
 			}
 
-
 			free(den);
 		}
 
@@ -159,8 +158,6 @@ plist_elem* search_collision(particle_list* particles, plist_elem* start,
 
 	// Iterate over every following particle
 	while(true){
-
-
 
 
 		t = collide(&(start->this.pcord), &(part->this.pcord));
@@ -220,8 +217,8 @@ int main(int argc, char** argv){
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
 
-	// buffer_size is a design variable
-	int buffer_size = 2*(MAX_NO_PARTICLES / nr_proc);
+	// buffer_size is a design variable, we are very unlikely to need this muchs
+	int buffer_size = MAX_NO_PARTICLES;
 	particle_t* rec_buff = malloc(buffer_size * sizeof(particle_t));
 	particle_t* send_buff = malloc(buffer_size * sizeof(particle_t));
 	MPI_Status status[4];
@@ -259,7 +256,7 @@ int main(int argc, char** argv){
 	}
 
 
-	srand(time(NULL));
+	srand(time(NULL) + rank);
 
 	float x;
 	float y;
@@ -270,11 +267,11 @@ int main(int argc, char** argv){
 
 	for(int i = 0; i <= my_start_partition; i++){
 
-		x = ((float) rand() / (float) RAND_MAX) * (border_right - border_left) + border_right;
-		y = ((float) rand() / (float) RAND_MAX) * (border_bot - border_top) + border_top;
+		x = rand1() * (border_right - border_left) + border_left;
+		y = rand1() * (border_bot - border_top) + border_top;
 
-		theta = ((float) rand()/ (float) RAND_MAX) * (2 * PI);
-		absv = ((float) rand()/ (float) RAND_MAX) * 50;
+		theta = rand1() * (2 * PI);
+		absv = rand1() * MAX_INITIAL_VELOCITY;
 
 		vx = absv * cos(theta);
 		vy = absv* sin(theta);
@@ -296,6 +293,7 @@ int main(int argc, char** argv){
 
 	part = particles.first;
 
+
 	// Collide all elements and remove collided elements from particles
 	while(true){
 		part = search_collision(&particles, part,  &collisions);
@@ -306,41 +304,41 @@ int main(int argc, char** argv){
 	}
 
 
-	part = collisions.first;
+	// Move all particles. If they leave our box, put them in parts_to_send
 	pcord_t* mcord;
 	plist_elem* next_part;
+	part = particles.first;
 	while(true){
 		if(part == NULL){
 			break;
 		}
-		mcord = &(part->this.pcord);
 
+		mcord = &(part->this.pcord);
 		feuler(mcord, 1);
 		my_pressure += wall_collide(mcord, wall);
 
 		// Removing an element from the list destroys its next reference
 		next_part = part->next;
 
-		// We empty collision list each iteration
-		remove_particle(&collisions, part);
-
+		// Check if the particle has left our box, move it to send list
 		if(mcord->y < border_top || mcord->y > border_bot || mcord->x < border_left
 			|| mcord->x > border_right){
-				// This particle has left our box, move it to send list
+
+				remove_particle(&particles, part);
 				append(&parts_to_send, part);
 			}
-		else{
-			// Move particle back to particle list
-			append(&particles, part);
-		}
 
 		part = next_part;
 	}
 
+	// Empty collisions list for this iteration
+	merge_plists(&collisions, &particles);
+
+
+
 	int offset = buffer_size / 4;
 	size_t sizeb = sizeof(particle_t);
 	int send_sizes[4] = {0,0,0,0};
-
 	part = parts_to_send.first;
 	while(true){
 		if(part == NULL){
@@ -364,7 +362,6 @@ int main(int argc, char** argv){
 		else{
 			memcpy(send_buff + send_sizes[3] + 3 * offset, &part->this, sizeb);
 			send_sizes[3] += 1;
-			// mcord->x > border_right == true
 		}
 
 
@@ -405,41 +402,27 @@ int main(int argc, char** argv){
 		MPI_Get_count(status + i, MPI_BYTE, &rec_count);
 		rec_count /= sizeof(particle_t);
 
-		// TODO remove this once Im sure that it works
-		if(rec_count != 0){
-			printf("%i received %i\n", rank, rec_count);
-			psize(&particles, rank);
-		}
 
 		for(int j = 0; j < rec_count; ++j){
 			particle_t* rec_part = rec_buff + j + (offset * i);
 			pcord_t* rec_cord = &(rec_part->pcord);
 
 			append(&particles, create_particle(rec_cord->x, rec_cord->y,
-				 	rec_cord->vx, rec_cord->y));
+				 	rec_cord->vx, rec_cord->vy));
 
 		}
 
-		// TODO remove this once Im sure that it works
-		if(rec_count != 0){
-			psize(&particles, rank);
-		}
 	}
 
-	// TODO remove this
-	printf("End of iteration %i\n", iteration);
 	} // End of the iteration
 
-	/*
+
 	MPI_Reduce(&my_pressure, &global_pressure, 1, MPI_DOUBLE,
 		 	MPI_SUM, 0, MPI_COMM_WORLD);
 
 	if(rank == 0){
 		printf("Average pressure = %f\n", global_pressure / (WALL_LENGTH*time_max));
 	}
-*/
-	// 3 - Loop for all iterations, need barrier
-	// 4 - Collect sum of momentum at the end of each iteration
 
 
 	MPI_Finalize();
