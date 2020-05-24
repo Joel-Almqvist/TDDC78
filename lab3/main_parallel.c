@@ -265,12 +265,12 @@ int main(int argc, char** argv){
 	float theta;
 	float absv;
 
-	for(int i = 0; i <= my_start_partition; i++){
+	for(int i = 0; i < my_start_partition; i++){
 
 		x = rand1() * (border_right - border_left) + border_left;
 		y = rand1() * (border_bot - border_top) + border_top;
 
-		theta = rand1() * (2 * PI);
+		theta = rand1() * 2 * PI;
 		absv = rand1() * MAX_INITIAL_VELOCITY;
 
 		vx = absv * cos(theta);
@@ -413,6 +413,7 @@ int main(int argc, char** argv){
 		}
 
 	}
+
 
 	} // End of the iteration
 
