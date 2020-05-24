@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
@@ -33,6 +35,8 @@ float rand1(){
 	4 - decrement x2 and repeat from step 3
 	5 - Terminate once we reach 1 or reach a satisfactory threshold.
 
+	Currently we just find ANY pair of denominator, which maximizes the difference
+	between them.
 */
 int* denoms(int x){
 	int* denom = malloc(sizeof(int) * 2);
@@ -201,11 +205,32 @@ plist_elem* search_collision(particle_list* particles, plist_elem* start,
 	return start->next;
 }
 
+
+// Thank you for this function August
+double timediff(struct timespec *begin, struct timespec *end)
+{
+	double sec = 0.0, nsec = 0.0;
+	if ((end->tv_nsec - begin->tv_nsec) < 0)
+	{
+		sec  = (double)(end->tv_sec  - begin->tv_sec  - 1);
+		nsec = (double)(end->tv_nsec - begin->tv_nsec + 1000000000);
+	} else
+	{
+		sec  = (double)(end->tv_sec  - begin->tv_sec );
+		nsec = (double)(end->tv_nsec - begin->tv_nsec);
+	}
+	return sec + nsec / 1E9;
+}
+
+
 // mpirun -np 1 --oversubscribe par 10 2000 10000 10000
 int main(int argc, char** argv){
 	unsigned int time_stamp = 0, time_max;
 	double my_pressure = 0;
 	double global_pressure = 0;
+	struct timespec starttime;
+	struct timespec endtime;
+	int message_counter = 0;
 
 
 	// parse arguments
@@ -226,7 +251,7 @@ int main(int argc, char** argv){
 	MPI_Init( &argc, &argv );
 	MPI_Comm_size( MPI_COMM_WORLD, &nr_proc );
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-
+	clock_gettime(CLOCK_MONOTONIC, &starttime);
 
 	// buffer_size is a design variable, we are very unlikely to need this muchs
 	int buffer_size = INIT_NO_PARTICLES;
@@ -401,6 +426,10 @@ int main(int argc, char** argv){
 			continue;
 		}
 
+		if(send_sizes[i] > 0){
+			message_counter++;
+		}
+
 		// Send empty message to neighbor to indicate no changes
 		MPI_Isend(send_buff + offset * i, send_sizes[i] * sizeof(particle_t), MPI_BYTE, dest[i],
 			iteration, MPI_COMM_WORLD, mpi_rq + i);
@@ -449,7 +478,12 @@ int main(int argc, char** argv){
 	MPI_Reduce(&my_pressure, &global_pressure, 1, MPI_DOUBLE,
 		 	MPI_SUM, 0, MPI_COMM_WORLD);
 
+		printf("%i sent %i messages\n", rank, message_counter);
+		MPI_Barrier(MPI_COMM_WORLD);
+
 	if(rank == 0){
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+		printf("Execution time: %f\n", timediff(&starttime, &endtime));
 		printf("Global pressure = %f\n", global_pressure);
 		printf("Average pressure = %f\n", global_pressure / (WALL_LENGTH*time_max));
 	}
