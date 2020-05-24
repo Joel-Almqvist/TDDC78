@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
@@ -9,6 +11,10 @@
 #include "definitions.h"
 #include "physics.h"
 
+
+#define INIT_NO_PARTICLES 2000    /* Initial number of particles/processor */
+#define BOX_HORIZ_SIZE 10000.0
+#define BOX_VERT_SIZE 10000.0
 
 //Feel free to change this program to facilitate parallelization.
 
@@ -22,12 +28,30 @@ void init_collisions(bool *collisions, unsigned int max){
 }
 
 
+// Thank you for this function August
+double timediff(struct timespec *begin, struct timespec *end)
+{
+	double sec = 0.0, nsec = 0.0;
+	if ((end->tv_nsec - begin->tv_nsec) < 0)
+	{
+		sec  = (double)(end->tv_sec  - begin->tv_sec  - 1);
+		nsec = (double)(end->tv_nsec - begin->tv_nsec + 1000000000);
+	} else
+	{
+		sec  = (double)(end->tv_sec  - begin->tv_sec );
+		nsec = (double)(end->tv_nsec - begin->tv_nsec);
+	}
+	return sec + nsec / 1E9;
+}
+
+
 int main(int argc, char** argv){
 
 
 	unsigned int time_stamp = 0, time_max;
 	float pressure = 0;
-
+	struct timespec starttime;
+	struct timespec endtime;
 
 	// parse arguments
 	if(argc != 2) {
@@ -35,7 +59,7 @@ int main(int argc, char** argv){
 		fprintf(stderr, "For example: %s 10\n", argv[0]);
 		exit(1);
 	}
-
+	clock_gettime(CLOCK_MONOTONIC, &starttime);
 	time_max = atoi(argv[1]);
 
 
@@ -105,10 +129,12 @@ int main(int argc, char** argv){
 
 	printf("Average pressure = %f\n", pressure / (WALL_LENGTH*time_max));
 
+	clock_gettime(CLOCK_MONOTONIC, &endtime);
+	printf("Execution time: %f\n", timediff(&starttime, &endtime));
+
 	free(particles);
 	free(collisions);
 
 	return 0;
 
 }
-
