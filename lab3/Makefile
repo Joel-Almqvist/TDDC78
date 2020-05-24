@@ -8,5 +8,8 @@ par:main_parallel.c  physics.c linked_list.c
 	mpicc -std=c99 -g -o $@ $^ -lrt -lm
 
 
+parit:main_parallel.c  physics.c linked_list.c
+	mpicc -trace -std=c99 -g -o $@ $^ -lrt -lm
+
 allclean:
 	-rm *.o sequential
