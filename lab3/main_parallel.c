@@ -10,40 +10,47 @@
 #include "definitions.h"
 #include "physics.h"
 #include "linked_list.h"
-//Feel free to change this program to facilitate parallelization.
+
+// Global variables :/
+double BOX_HORIZ_SIZE;
+double BOX_VERT_SIZE;
+int INIT_NO_PARTICLES;
+
 
 float rand1(){
 	return (float)( rand()/(float) RAND_MAX );
 }
 
 
+/* TODO the following algorithm would balance the load much better:
+
+	1 - take the root of x
+	2 - x1 = ceiling(x), x2 = floor(x)
+	3 - for all x1 in ceil(x) to x, check if x2*x1 == x. if it is larger
+			than x then break early. Store all pairs of x2*x1 such that they are
+			 equal to x. Only add pairs which are better or equal to the current
+			 best pair, which has the smallest difference between them.
+	4 - decrement x2 and repeat from step 3
+	5 - Terminate once we reach 1 or reach a satisfactory threshold.
+
+*/
 int* denoms(int x){
 	int* denom = malloc(sizeof(int) * 2);
 	int n = 0;
 
-
-	if(x == 4){
-		denom[0] = 2;
-		denom[1] = 2;
-		return denom;
-	}
-
 	if(x == 2){
+		// We always want position 0 to have the largets number
 		denom[0] = 2;
 		denom[1] = 1;
-		return denom;
 	}
 
-	for(int i = x - 2; i > 1; --i){
-		if(x % i == 0){
-			denom[n] = i;
-			if(++n == 2){
-				break;
-			}
-		}
+	else if(x % 2 == 0){
+		denom[1] = 2;
+		denom[0] = x / 2;
 	}
-	if(n != 2){
+	else{
 		denom[0] = 1;
+		denom[1] = 1;
 	}
 	return denom;
 }
@@ -194,20 +201,24 @@ plist_elem* search_collision(particle_list* particles, plist_elem* start,
 	return start->next;
 }
 
-// mpirun -np 6 --oversubscribe par 4
+// mpirun -np 1 --oversubscribe par 10 2000 10000 10000
 int main(int argc, char** argv){
 	unsigned int time_stamp = 0, time_max;
 	double my_pressure = 0;
 	double global_pressure = 0;
 
+
 	// parse arguments
-	if(argc != 2) {
-		fprintf(stderr, "Usage: %s simulation_time\n", argv[0]);
+	if(argc != 5) {
+		fprintf(stderr, "Usage: %s simulation_time #particles box_width box_height\n", argv[0]);
 		fprintf(stderr, "For example: %s 10\n", argv[0]);
 		exit(1);
 	}
 
 	time_max = atoi(argv[1]);
+	INIT_NO_PARTICLES = atof(argv[2]);
+	BOX_HORIZ_SIZE = atof(argv[3]);
+	BOX_VERT_SIZE = atof(argv[4]);
 
 
 	int nr_proc;   // number of started MPI processes
@@ -232,8 +243,18 @@ int main(int argc, char** argv){
 
 	double border_right, border_left, border_top, border_bot;
 
-	set_box_limits(&nr_rows, &nr_cols, nr_proc, rank, &border_top,
-		&border_right, &border_bot, &border_left, dest, &nr_neighbors);
+	if(nr_proc != 1){
+		set_box_limits(&nr_rows, &nr_cols, nr_proc, rank, &border_top,
+			&border_right, &border_bot, &border_left, dest, &nr_neighbors);
+	}
+	else{
+		nr_rows = nr_cols = 1;
+		dest[0] = dest[1] = dest[2] = dest[3] = -1;
+	 	nr_neighbors = 0;
+		border_right = BOX_HORIZ_SIZE;
+		border_bot = BOX_VERT_SIZE;
+		border_left = border_top = 0;
+	}
 
 	// All particles (may change during an iteration)
 	particle_list particles;
@@ -254,7 +275,6 @@ int main(int argc, char** argv){
 	else{
 		my_start_partition = INIT_NO_PARTICLES / nr_proc;
 	}
-
 
 	srand(time(NULL) + rank);
 
@@ -293,7 +313,6 @@ int main(int argc, char** argv){
 
 	part = particles.first;
 
-
 	// Collide all elements and remove collided elements from particles
 	while(true){
 		part = search_collision(&particles, part,  &collisions);
@@ -302,7 +321,6 @@ int main(int argc, char** argv){
 			break;
 		}
 	}
-
 
 	// Move all particles. If they leave our box, put them in parts_to_send
 	pcord_t* mcord;
@@ -331,10 +349,9 @@ int main(int argc, char** argv){
 		part = next_part;
 	}
 
+
 	// Empty collisions list for this iteration
 	merge_plists(&collisions, &particles);
-
-
 
 	int offset = buffer_size / 4;
 	size_t sizeb = sizeof(particle_t);
@@ -346,6 +363,12 @@ int main(int argc, char** argv){
 		}
 
 		mcord = &(part->this.pcord);
+
+		/*
+		printf("Rank %i Sending particle at %f %f with speed %f \n", rank,
+			mcord->x, mcord->y,
+				sqrt(mcord->vx * mcord->vx + mcord->vy * mcord->vy));
+			*/
 
 		if(mcord->y < border_top){
 			memcpy(send_buff + send_sizes[0], &part->this, sizeb);
@@ -373,13 +396,13 @@ int main(int argc, char** argv){
 	// The list is now empty, re initialize
 	init(&parts_to_send);
 
-
 	for(int i = 0; i < 4; ++i){
 		if(dest[i] == -1){
 			continue;
 		}
 
-		MPI_Isend(send_buff, send_sizes[i] * sizeof(particle_t), MPI_BYTE, dest[i],
+		// Send empty message to neighbor to indicate no changes
+		MPI_Isend(send_buff + offset * i, send_sizes[i] * sizeof(particle_t), MPI_BYTE, dest[i],
 			iteration, MPI_COMM_WORLD, mpi_rq + i);
 	}
 
@@ -407,13 +430,18 @@ int main(int argc, char** argv){
 			particle_t* rec_part = rec_buff + j + (offset * i);
 			pcord_t* rec_cord = &(rec_part->pcord);
 
+			/*
+			printf("Rank %i Received particle at %f %f with speed %f \n", rank,
+				rec_cord->x, rec_cord->y,
+					sqrt(rec_cord->vx * rec_cord->vx + rec_cord->vy * rec_cord->vy));
+				*/
+
 			append(&particles, create_particle(rec_cord->x, rec_cord->y,
 				 	rec_cord->vx, rec_cord->vy));
 
 		}
 
 	}
-
 
 	} // End of the iteration
 
@@ -422,6 +450,7 @@ int main(int argc, char** argv){
 		 	MPI_SUM, 0, MPI_COMM_WORLD);
 
 	if(rank == 0){
+		printf("Global pressure = %f\n", global_pressure);
 		printf("Average pressure = %f\n", global_pressure / (WALL_LENGTH*time_max));
 	}
 

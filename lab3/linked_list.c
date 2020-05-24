@@ -128,7 +128,7 @@ void merge_plists(particle_list* from, particle_list* to){
     //remove_particle(from, elem);
     append(to, elem);
 
-    elem = elem->next;
+    elem = elem_temp;
   }
   init(from);
 }
