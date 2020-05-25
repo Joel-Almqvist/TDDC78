@@ -1,3 +1,9 @@
 sequential
 foo.c
 par
+*.pdf
+*.blg
+*.log
+*.aux
+*.bbl
+*.gz

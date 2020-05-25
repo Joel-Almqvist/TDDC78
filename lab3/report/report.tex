@@ -1,0 +1,160 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\graphicspath{{/home/joel/Documents/TDDC78/labs/lab3/plots/}} 
+
+
+\title{TDDC78 Miniproject Report}
+\author{Joel Almqvist (joeal360)}
+\date{\today}
+
+\usepackage{graphicx}
+
+\begin{document}
+
+\maketitle
+
+\emph{This outline is provided as a suggested starting point for your report.
+\\ Please see the lab compendium for full description of the miniproject assignment.
+\\Remove all the comments in italics before sending in.
+\\/ August and Suejb, May 2019}
+
+\section{Introduction}
+
+The project was to create a parallel version of a particle simulation. In it, particles are moved and potentially collide every iteration. All collisions are fully elastic and the kinetic energy of the system is static. Whenever a particle collide with the boundaries of the simulation they absorb some of the energy, and by measuring how much we can calculate the pressure.
+
+\section{Method}
+
+\subsection{High level view}
+The parallel implementation is based on dividing the simulated box into a grid and letting each process handle all particles within its box. Whenever a particle leaves its box we send it to the corresponding neighbor. However our grid does not allow for diagonal neighbor so in the rare case that a particle crosses a diagonal boundary it would need two iteration steps to reach the correct box.
+
+
+\subsection{Geometry}
+The geometry of the grid which we create has a lot of significance to how the work load is divided. The circumference of a partition is proportional to how many particles enters it. Hence partitioning the box in two dimensions with a height and width as similiar to each other as possible would maximize the area covered while minimizing the circumference. We reach this conclussion by simple geometry and analyzing the following equations where A and B are the two dimensions of a rectangle.
+
+$$Circumference = 2A + 2B$$
+$$Area = A \cdot B$$
+
+If we want to minimize the circumference we need to minimize A and B, and two cover a maximal area with the lowest choice of A and B they should be as close to each other as possible. \\ \\
+
+However the implementation falls short of this optimization due to lack of time to implement an algorithm which finds the two largest factors A and B such that $C = A \cdot B$ where C is the number of processes. Instead the suboptimal solution is used where $A = 2$, which in practice leads to the number of columns being affected by how many processes we use whereas the number of rows are not. However to change this we only need to modify the factorization function "denoms" and the whole system is built around a two dimensional implementation.
+
+
+The current implementation as is, is similar to a one dimensional one where we only partition along one axises. However we do not gain the benefit of a one dimensional partitioning, which is that they are able to partition an evenly large area to an odd number of processes. Our implementation do not work for an odd number processes. Hence we do not gain the benefit of either a one dimensional partitioning nor a two dimensional one. However all our implementation need is to plug in a factorization algorithm for it two become a proper two dimensional one. The following pseudo code is what I would have wanted to add, but lack the time to properly implement and debug:
+
+\begin{enumerate}
+	\item $x = \sqrt{n}$ where $n = number of procceses$
+	\item $x_1 = floor(x)$
+	\item While $x_2 \cdot x_1 > x$ where $x_2 = x_1 + i$
+	\item If $x_2 \cdot x_1 > x$ decrement $x_1$, terminate if $x_1 = 1$
+	\item If $x_2 \cdot x_1 == x$, store the pair $x_1$ and $x_2$ if $x_2 - x_1$ is lower than the currently stored best pair.
+\end{enumerate}
+
+
+\subsection{Design choices}
+I decided to implement the particle list as a doubled linked list. This is a good solution since the particle list requires a lot of removal of arbitrarily chosen elements. If we would have an array of length $n^1$ we would need to move on average $n^1/2$ elements whenever a particles leaves our partition. It is a lot more work compared with a linked list which only need to modify at most two elements to remove an arbitrary element.
+
+ Another plausible array based implementation would be to not restructure the array when we remove an element and instead remember the max position where we have inserted an element. An insert would then search to the max position to find an empty slot and if it does not find one it would increment the max position and add the element at this position. Deletions would be $O(1)$ and insertions $O(N/2)$ on average. However the reason why this design was not chosen is that this array would need to be large enough to fit all elements which theoretically could be every particle in the simulation. Either it is unreasonably large for most cases, uses dynamically allocated memory which requires more overhead and work to implement. Or given enough time this solution would eventually crash due to unlikely events occurring.
+ 
+  The primary reason for why this design is poor however is that the array would increase when needed by increasing the counter, but it would never shrink. Hence if a partition for one iteration has a unlikely large amount of particles, then all consecutive searches through the array would need to look at uneccesarily many elements. Given time all partitions would have a large array, even if only some of them will have unusually many particles at any time. Hence the search for all particles within a partitions would need to consider the maximum number of elements it has ever had. Hence for the array based solution to be competitive to the linked list we would need to implement dynamic memory allocation, both increase and decrease. While plausible it work require significantly more work for a comparable efficiency. 
+  
+  
+  \subsection{Approximations}
+To simplify the code only two particles are capable of colliding at the same time. This is the same simplification as the given sequential codes, and it is acceptable since it is such an unlikely event. A new one added however is that all partitions start with an evenly distributed amount of particles. This does however not affect the average results compared with the sequential one for the following reason. The sequential code distributes the particles according to a uniform distribution, and the parallel spread is the most common case of such a spread. If anything this hinders strange outliers. Again on average however this should affect our results anymore than a seed change would. The reason for this approximation is to prevent a flood of messages occurring if every partition has to send most of its particles at the start.
+
+
+\emph{Methodology and approach for parallelization and performance evaluation.
+Be clear about any approximations applied as part of the parallelisation process.
+ Figures may be a good idea here, too.}
+
+\section{Debugging with DDT}
+
+\emph{Show and explain how you used DDT during the miniproject (or alternatively, another one of the lab exercises are acceptable). At least one screen capture of your code in the DDT interface is required.}
+
+\section{Performance analysis with ITAC}
+In the second screenshot of ITAC we see that we spend $0.6\%$ of our time on the send function and $21.2\%$ on the receive function. This is not quite true because after our non blocking send we have a blocking receive, and hence a large part of the send is likely performed during the receive call. It does however illustrate the large difference between a blocking and non blocking MPI call. Overall the application spends around $22.6\%$ of the time communicating. The majority of the work done is hence useful and we can conclude that this problem lends itself well to parallelization. During the project I used ITAC at the end to observe the behavior of the program. We can see interesting behavior such as an ebb and flow of messages being sent. This is the end of an iteration where all particles are being sent. And through the local synchronization of the project messages tend to bunch up.
+
+
+\includegraphics[scale=0.6]{/home/joel/Documents/TDDC78/screen-shots/sc-itac-pie.png} \\ \\
+
+
+\includegraphics[scale=0.42]{/home/joel/Documents/TDDC78/screen-shots/sc-itac-func-freq.png}
+
+
+\rotatebox[origin=c]{90}{\includegraphics[scale=0.33]{/home/joel/Documents/TDDC78/screen-shots/sc-itac-ebbflow.png}}
+
+\emph{Show and explain how you used ITAC during the miniproject (or alternatively, another one of the lab exercises are acceptable). At least one screen capture of your program's executing trace in the ITAC interface is required.}
+
+\section{Results}
+
+
+\subsection{Gas law verification using particles}
+The gas law is $pV = nRT$ and hence $p \propto n$. So keeping the other variables constant when we double the number of particles the measured pressure should also double. Looking at the graph TODO LÄNK we can see that this is indeed occurring.
+
+\includegraphics[scale=0.5]{pressure_to_n.png}
+
+
+\subsection{Gas law verification using volume}
+The pressure in the gas law is also proportional to the volume since $p = \frac{nRT}{V}$. So when we increase the volume the pressure should decrease the same factor. In the graph we have increased by the volume by a factor 4 and the pressure decreases by the expected factor 4. 
+
+
+\includegraphics[scale=0.5]{pressure_to_v}
+
+
+\emph{Measurement data and plots. Describe each set of numbers and/or diagram unambiguously. (Problem size, other parameters, number of ranks, etc.)
+Compare against a sequential version of the program.}
+
+
+
+\subsection{Execution time}
+To test the execution time I ran the experiment with the same number of particles, volume and only increased the number of processes. The experiment is computational intensive with $n = 4000$ and $V = 10^8$. The result is shown in the following graph in which we can see a relative speedup of a factor 4 when we double the amount of processes. With the measured $T_s = 33.3$ seconds, $T_p(1) = 121.5$ and the speedup factor 4 we get: $$S_{abs} = \frac{T_s}{T(p)} = 33.3 / (121.5 * 0.25^{p-1}) = 0.27 / 0.25^{p-1} = 0.068 / 0.25^p = 0.068 \cdot 4^p$$
+
+This speedup means that when $p \geq 2$ we perform better than $T_s$.
+
+\includegraphics[scale=0.5]{exec_time_large}
+
+
+
+\subsection{Scaling}
+To test the scaling of the parallel program I generated the graph below where we have more processes, but each processes is given the same amount of work. This was done by letting the total number of particles $n = 500 \cdot p$, box height = 1000, box width = $500 \cdot p$ and iterations = 100. For a perfectly scalable solution we would expect the execution time to be constant when we increase p. This is however not what we see. Instead the process time is almost doubled going from $p=1$ to $p=64$.
+
+
+\begin{figure}[h]
+	\caption{Execution time for 500 particles per partition}
+	\centering
+	\includegraphics[scale=0.6]{pscale}
+\end{figure}
+
+
+
+
+\section{Discussion}
+
+\subsection{Gas law}
+We can verify the gas law since the pressure changes as we would expect when we change the variables. We have note proven that it holds for our simulation, only that our pressure is affected in the correct proportion to it. The result is not a perfect proportionality, but since each run may give varying results this is acceptable. We fall within the expected variation in my opinion.
+
+\subsection{Execution time}
+The algorithm of checking collisions has the complexity $O(N^2)$. For every particle we check every other particle for a collision. So when we reduce $N$ by a factor two then in a perfect parallelization the execution time would decrease by a factor of four. Which is what we see in the graph. The quadratic scaling means that we get extremely large run time difference with many processes, from ~2 minutes to less than 0.1 seconds.
+
+A different view on the solution is that we sort the particles. A particle is only allowed to collide with other particles within its partition. Hence by partitioning the particles could substantially speedup the sequential algorithm. Using this solution a sequential algorithm would get the complexity $O((\frac{N}{P})^2 \cdot P) = O(N^2 / P)$. Using many partitions $P$ we could get a large speedup at the cost of some overhead. The sequential base line solution is hence not a fair baseline comparison as it is not the optimal sequential solution. 
+
+
+\subsection{Scaling}
+The improper scaling we saw can be explained by two important factors. Firstly we have to buffers in which we store particles to be sent and received. The size of this buffer is a design variable and I chose it to scale with the total number of particles in the system. In practice we rarely use close to the size we allocate. This experiment demonstrates that this design variable was poorly chosen as every partition allocates around $1.28 \cdot 10^6$ bytes when $p=64$, but only $2*10^4$ when $p=1$. Another important factor is that at the end the root node reduces the pressure from all nodes. The execution time measure is taken after this invocation, and hence the execution scales with the number of nodes. While we almost double in execution time, the absolute difference in time is still rather low, it is in the magnitude of $0.1$ seconds. As such I believe that the above mentioned, rather minor factors, are likely the cause of this behavior.
+
+
+\emph{Discuss the results critically. Explain based on course theory and your experiences in the lab series.}
+
+\section{Conclusion}
+The simulation verifies the gas law even though some approximations were made. As such the approximations are reasonable do not noticeably affect the validity of the systems results. The implementation of the system lacks in certain design aspects. It does not minimize the circumference of the partitions and as such send more messages than needed. It is a hybrid of a two dimensional partitioning and a one dimensional partitioning without the benefits of both in its current state. While this is a very undesirable state, the functionality of a two dimensional partitioning is there, it only needs to implement a proper factorization algorithm in the function "denoms".
+
+
+The performance of the program is good, the absolute speedup of $0.068 \cdot 4^p$ means that we outperform the sequential algorithm with just two processes. Since the algorithm is quadratic, parallelization gives us much lower execution time when we increase p. The problem is therefore very fit for parallelization. However the current implementation does not scale as well as we would have hoped for. The execution time increases with more processes even when the work load per processes remains constant. This is partly due to the overhead which comes with reducing from more processes, and partly from a poorly chosen design variable.
+
+
+To summarize the program works quite well and is faster by an order of three magnitudes compared to the sequential implementation given 32 processes on a large problem size. However we can identify points where the implementation fails to live up to the design. As such we have clear points of improvements if more time would have be given.
+
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}
